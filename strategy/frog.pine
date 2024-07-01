@@ -452,25 +452,6 @@ a = ma_function(ta.tr(true), atr_length) * m
 x = ma_function(ta.tr(true), atr_length) * m + src1
 x2 = src2 - ma_function(ta.tr(true), atr_length) * m
 
-// p1 = plot(x, title='ATR Short Stop Loss', color=colshort, trackprice=pline ? true : false, transp=20)
-// p2 = plot(x2, title='ATR Long Stop Loss', color=collong, trackprice=pline ? true : false, transp=20)
-
-var table Table = table.new(position.bottom_center, 3, 1, border_width=3)
-
-f_fillCell(_table, _column, _row, _value, _timeframe) =>
-
-    _cellText = _timeframe + str.tostring(_value, '#.#')
-    table.cell(_table, _column, _row, _cellText, text_color=col1)
-    table.cell_set_text_color(Table, 1, 0, color.new(col3, transp=0))
-    table.cell_set_text_color(Table, 2, 0, color.new(col2, transp=0))
-
-if barstate.islast
-    f_fillCell(Table, 0, 0, a, 'ATR: ')
-    f_fillCell(Table, 1, 0, x, 'H: ')
-    f_fillCell(Table, 2, 0, x2, 'L: ')
-
-
-
 // 第四个 模块  fluid trades
 
 
