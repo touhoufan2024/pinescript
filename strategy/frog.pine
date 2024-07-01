@@ -408,21 +408,6 @@ ma2_color  = input(color.red, ""     , inline="MA #2", group="Channel №1")
 ma2 = ma(ma2_source, ma2_length, ma2_type)
 showLabels1 = input(true, "Show Buy/Sell Labels ?", group="Channel №1")
 
-show_ma3   = input(false   , "MA High", inline="MA #3", group="Channel №2")
-ma3_type   = input.string("SMA"  , ""     , inline="MA #3", options=["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"], group="Channel №2")
-ma3_source = input(high  , ""     , inline="MA #3", group="Channel №2")
-ma3_length = input.int(20    , ""     , inline="MA #3", minval=1, group="Channel №2")
-ma3_color  = input(color.orange, ""     , inline="MA #3", group="Channel №2")
-ma3 = ma(ma3_source, ma3_length, ma3_type)
-
-show_ma4   = input(false   , "MA Low", inline="MA #4", group="Channel №2")
-ma4_type   = input.string("SMA"  , ""     , inline="MA #4", options=["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"], group="Channel №2")
-ma4_source = input(low  , ""     , inline="MA #4", group="Channel №2")
-ma4_length = input.int(20    , ""     , inline="MA #4", minval=1, group="Channel №2")
-ma4_color  = input(color.blue, ""     , inline="MA #4", group="Channel №2")
-ma4 = ma(ma4_source, ma4_length, ma4_type)
-showLabels2 = input(true, "Show Buy/Sell Labels ?", group="Channel №2")
-
 Hlv1 = float(na)
 Hlv1 := (wicks ? high : close) > ma1 ? 1 : (wicks ? low : close) < ma2 ? -1 : Hlv1[1]
 sslUp1   = Hlv1 < 0 ? ma2 : ma1
