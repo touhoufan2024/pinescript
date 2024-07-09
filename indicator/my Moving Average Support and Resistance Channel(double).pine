@@ -55,14 +55,33 @@ small_top1 = small_top + x2 * ma_function(ta.tr(true), len)
 basis = ma_function(hlc3, len)
 
 
-plot(big_top, '大top0', color=color.new(color.red, 0))
-plot(big_bottom, '大bottom0', color=color.new(color.green, 0))
-plot(big_top1, '大top1')
-plot(big_bottom1, '大bottom1')
-plot(basis, 'Middle Line', color=color.new(color.yellow, 0))
+plot(big_top1, '大top1', color = color.blue)       // 1
+plot(big_top, '大top0', color= color.red)          // 3
+plot(big_bottom, '大bottom0', color= color.green)  // 8
+plot(big_bottom1, '大bottom1', color.aqua)         //9
+plot(basis, 'Middle Line', color=color.yellow)    // 5
+plot(small_top1, '小top1', color = color.purple)  // 2
+plot(small_top, '小top0', color=color.navy)       // 4
+plot(small_bottom, '小bottom0', color=color.lime)   // 6
+plot(small_bottom1, '小bottom1', color = color.teal)  // 7
 
 
-plot(small_top, '小top0', color=color.new(color.red, 0))
-plot(small_bottom, '小bottom0', color=color.new(color.green, 0))
-plot(small_top1, '小top1')
-plot(small_bottom1, '小bottom1')
+// 将 series float 数据存储在数组中
+float[] seriesArray = array.new_float()
+array.push(seriesArray, big_top1)
+array.push(seriesArray, big_top)
+array.push(seriesArray, big_bottom)
+array.push(seriesArray, big_bottom1)
+array.push(seriesArray, basis)
+array.push(seriesArray, small_top1)
+array.push(seriesArray, small_top)
+array.push(seriesArray, small_bottom)
+array.push(seriesArray, small_bottom1)
+
+array.sort(seriesArray)
+
+
+log.error("*************srtart**************")
+for i = 0 to 8
+    log.info("{0}:  {1}", i, array.get(seriesArray, i))
+log.error("*************end*************")
