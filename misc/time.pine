@@ -1,0 +1,34 @@
+//@version=5
+strategy("My strategy", overlay=true, margin_long=100, margin_short=100)
+
+
+// 以下是所有月份的简称：
+
+// 一月 (January) - Jan
+// 二月 (February) - Feb
+// 三月 (March) - Mar
+// 四月 (April) - Apr
+// 五月 (May) - May
+// 六月 (June) - Jun
+// 七月 (July) - Jul
+// 八月 (August) - Aug
+// 九月 (September) - Sep
+// 十月 (October) - Oct
+// 十一月 (November) - Nov
+// 十二月 (December) - Dec
+
+
+enableFilter = input(true,  "Enable Backtesting Range Filtering")
+fromDate     = input.time(timestamp("20 Jan 2023 00:00 +0300"), "Start Date")
+toDate       = input.time(timestamp("20 Jan 2024 00:00 +0300"), "End Date")
+
+tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
+
+longCondition =  ta.crossover(ta.sma(close, 14),  ta.sma(close, 28))
+shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
+
+if longCondition and tradeDateIsAllowed
+    strategy.entry("Long", strategy.long)
+
+if shortCondition and tradeDateIsAllowed
+    strategy.entry("Short", strategy.short)
