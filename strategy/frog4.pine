@@ -1,0 +1,1098 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ashchippy
+
+red = color.rgb(231, 17, 17)
+green = color.rgb(6, 245, 105, 20)
+blue = color.rgb(82, 112, 243)
+orange = color.rgb(255, 145, 0, 20)
+purple = color.rgb(204, 0, 255)
+white = #f4f5f8
+lightRed = color.new(color.red, 80)  // 更透明的红色
+darkRed = color.new(color.red, 20)  // 更不透明的红色
+lightGreen = color.new(color.green, 80)  // 更透明的绿色
+darkGreen = color.new(color.green, 20)  // 更不透明的绿色
+gold = #f1e100
+
+
+//@version=5
+strategy(title='机械蛙4.0', shorttitle='机械蛙4.0', overlay=false, pyramiding = 5)
+
+
+// 需要 用到 的 指标 有以下:
+// 1. my RedK Effort Versus Results Explorer v2.0, 其中包含了 rrof, 红蓝线 和 蜡烛 格子 等数据
+// 2. 双 彩虹线, 用于判断 趋势
+// 3. ATR 指标, 用于 计算 盈亏比
+// 4. my FluidTrades - SMC Lite 订单块, 
+// 5. WWVLB
+//  RedK EVEREX
+// ***********************************************************************************************************
+// This function calcualtes a selectable average type
+GetAverage(_data, _len, MAOption) =>
+    value = switch MAOption
+        'SMA' => ta.sma(_data, _len) 
+        'EMA' => ta.ema(_data, _len) 
+        'HMA' => ta.hma(_data, _len) 
+        'RMA' => ta.rma(_data, _len) 
+        => 
+            ta.wma(_data, _len)
+// ***********************************************************************************************************
+
+// ========================================================================================
+// Normalization function - Normalizes values that are not restricted within a zero to 100 range
+// This technique provides a scale that is closer to a "human" estimation of value in "bands" 
+// as in: low, below average, average, above average, high, super high  
+// this also avoids the issue of extreme values when using the stoch() -based technique
+// these values are subjective, and can be changed - but slight changes here won't lead to major changes in outcome
+// since all is relative to the same data series. 
+//
+Normalize(_Value, _Avg) =>
+
+    _X = _Value / _Avg
+    
+    _Nor = 
+      _X > 1.50 ? 1.00 :
+      _X > 1.20 ? 0.90 :
+      _X > 1.00 ? 0.80 :
+      _X > 0.80 ? 0.70 :
+      _X > 0.60 ? 0.60 :
+      _X > 0.40 ? 0.50 :
+      _X > 0.20 ? 0.25 :
+      0.1
+// ===================================================================================
+
+
+// ===========================================================================================================
+//      Inputs
+// ===========================================================================================================
+grp_1   = 'Rate of FLow (RoF)'
+grp_2   = 'Lookback Parameters'
+grp_3   = 'Bias / Sentiment'
+grp_4   = 'EVEREX Bands'
+
+length    = input.int(10, minval = 1, inline = 'ROF', group = grp_1)
+MA_Type   = input.string(defval = 'EMA', title = 'MA type', 
+  options = ['EMA', 'WMA', 'SMA', 'HMA', 'RMA'], inline = 'ROF', group = grp_1) 
+smooth    = input.int(defval = 3, title = 'Smooth', minval = 1,  inline = 'ROF', group = grp_1)
+
+//src       = input.source(close, title = "Source (for 2-Bar Shift)", group = grp_1)
+
+sig_length  = input.int(5, 'Signal Length', minval = 1, inline = 'Signal', group = grp_1)
+S_Type      = input.string(defval = 'WMA', title = 'Signal Type', 
+  options = ['WMA', 'EMA', 'SMA', 'HMA', 'RMA'], inline = 'Signal', group = grp_1)
+
+lookback    = input.int(defval = 20, title = 'Length', minval = 1, inline = 'Lookback', group = grp_2)
+lkbk_Calc   = input.string(defval = 'Simple', title = 'Averaging', 
+  options = ['Simple', 'Same as RRoF'], inline='Lookback', group = grp_2 )
+
+showBias    = input.bool(defval = false, title = 'Bias Plot ? -- ', inline = 'Bias', group = grp_3)
+B_Length    = input.int(defval = 30, title = 'Length', minval = 1, inline = 'Bias', group = grp_3)
+B_Type      = input.string(defval = 'WMA', title = 'MA type', 
+  options = ['WMA', 'EMA', 'SMA', 'HMA', 'RMA'], inline = 'Bias', group = grp_3)
+
+showEVEREX  = input.bool(true, 'Show EVEREX Bands ? -- ', inline = 'EVEREX', group = grp_4)
+// a simple mechanism to control/change the strength band scale for improving visualization
+// applies only to the "bands" and the level hlines
+bandscale   = str.tonumber(input.string("200", title = "Band Scale", 
+  options = ['200', '100', '400'], inline = 'EVEREX', group = grp_4))
+
+DispBias    = showBias ? display.pane : display.none 
+DispBands   = showEVEREX ? display.pane : display.none 
+showhlines  = showEVEREX ? display.all : display.none 
+
+Disp_vals   = display.status_line + display.data_window
+
+
+// ===========================================================================================================
+//          Calculations
+// ===========================================================================================================
+
+// Volume "effort" Calculation  -- will revert to no volume acceleration for instruments with no volume data
+
+v   = na(volume) ? 1 : volume                     // this part ensures we're not hit with calc issues due to NaN's
+NoVol_Flag = na(volume) ? true : false          // this is a flag to use later 
+
+lkbk_MA_Type = lkbk_Calc == 'Simple' ? 'SMA' : MA_Type
+
+Vola  = GetAverage(v, lookback, lkbk_MA_Type)
+Vola_n_pre = Normalize(v, Vola) * 100
+
+//Now trap the case of no volume data - ensure final calculation not impacted 
+Vola_n = NoVol_Flag ? 100 : Vola_n_pre
+//plot(Vola_n , "Volume Normalized", color = color.white, display = display.none)
+
+// ===============================================================================================================
+// Price "result" calculation
+// we'll consider "result" (strength or weakness) to be the outcome (average) of 6 elements: 
+// Same (in-)Bar strength elements:
+// 1 - Bar Closing: the closing within the bar  --> this will be a direct +100 / -100 value
+// 2 - Spread to range: the spread to range ratio (that's BoP formula) --> direct +100 / -100 value
+// 3 - Relative Spread: spread relative to average spread during lookback period --> normalized
+// 2-bar strength elements:
+// 4 - 2-bar closing: the closing within 2-bar range (that accomodates open gap effect)
+// 5 - 2-bar Closing Shift to Range: Change in close relative to the 2-bar range     
+// 6 - 2-bar Relative Shift: the 2-bar Close (or source price) shift - relative to the average 2-bar shift during lookback period --> normalized
+
+
+BarSpread = close - open 
+BarRange  = high - low
+R2        = ta.highest(2) - ta.lowest(2)
+SrcShift  = ta.change(close)
+//TR = ta.tr(true)
+
+sign_shift = math.sign(SrcShift) 
+sign_spread = math.sign(BarSpread) 
+// =========================================================================================================
+//    in-bar assessments
+// =========================================================================================================
+// 1. Calculate closing within bar - should be max value at either ends of the bar range 
+barclosing  = 2 * (close - low) / BarRange * 100 - 100
+//plot(barclosing, "Bar Closing %" , color=color.fuchsia, display = display.none)
+
+// 2. caluclate spread to range ratio
+s2r = BarSpread / BarRange * 100
+//plot(s2r, "Spread:Range", color = color.lime, display = display.none)
+
+// 3. Calculate relative spread compared to average spread during lookback
+BarSpread_abs   = math.abs(BarSpread)
+BarSpread_avg   = GetAverage(BarSpread_abs, lookback, lkbk_MA_Type)
+BarSpread_ratio_n = Normalize(BarSpread_abs, BarSpread_avg) * 100 * sign_spread  
+//plot(BarSpread_ratio_n, "Bar Spread Ratio", color=color.orange, display=display.none)
+// =========================================================================================================
+//    2-bar assessments
+// =========================================================================================================
+// 4. Calculate closing within 2 bar range - should be max value at either ends of the 2-bar range 
+barclosing_2  = 2 * (close - ta.lowest(2)) / R2 * 100 - 100
+//plot(barclosing_2, "2-Bar Closing %" , color=color.navy, display = display.none)
+
+// 5. calculate 2-bar shift to range ratio
+Shift2Bar_toR2 = SrcShift / R2 * 100 
+//plot(Shift2Bar_toR2, "2-bar Shift vs 2R", color=color.yellow, display = display.none)
+
+
+// 6. Calculate 2-bar Relative Shift 
+SrcShift_abs    = math.abs(SrcShift)
+srcshift_avg    = GetAverage(SrcShift_abs, lookback, lkbk_MA_Type) 
+srcshift_ratio_n   = Normalize(SrcShift_abs, srcshift_avg) * 100 * sign_shift
+//plot(srcshift_ratio_n, "2-bar Shift vs Avg", color=color.white, display = display.none)
+// ===============================================================================
+
+// =========================================================================================
+// Relative Price Strength combining all strength elements
+
+Pricea_n = (barclosing + s2r + BarSpread_ratio_n + barclosing_2 + Shift2Bar_toR2 + srcshift_ratio_n) / 6
+//plot(Pricea_n, "Price Normalized", color=color.orange, display = display.none)
+
+
+//Let's take Bar Flow as the combined price strength * the volume:avg ratio
+// this works in a similar way to a volume-weighted RSI
+bar_flow  =   Pricea_n * Vola_n / 100 
+//plot(bar_flow, 'bar_flow', color=color.green, display = display.none)
+
+// calc avergae relative rate of flow, then smooth the resulting average
+// classic formula would be this
+//RROF    = f_ma(bar_flow, length, MA_Type)  
+//
+// or we can create a relative index by separating bulls from bears, like in an RSI - my preferred method
+// here we have an added benefit of plotting the (average) bulls vs bears separately - as an option 
+bulls = math.max(bar_flow, 0)
+bears = -1 * math.min(bar_flow, 0)
+
+bulls_avg = GetAverage(bulls, length, MA_Type)
+bears_avg = GetAverage(bears, length, MA_Type)
+
+dx          = bulls_avg / bears_avg
+RROF         = 2 * (100 - 100 / (1 + dx)) - 100
+RROF_s      = ta.wma(RROF, smooth)
+
+Signal = GetAverage(RROF_s, sig_length, S_Type)
+
+// Calculate Bias / sentiment on longer length
+dx_b          = GetAverage(bulls, B_Length, B_Type) / GetAverage(bears, B_Length, B_Type)
+RROF_b       = 2 * (100 - 100 / (1 + dx_b)) - 100
+RROF_bs      = ta.wma(RROF_b, smooth)
+
+// ===========================================================================================================
+//      Colors & plots
+// ===========================================================================================================
+
+c_zero  = color.new(#1163f6, 25)
+c_band  = color.new(color.yellow, 40)
+
+c_up    = color.aqua
+c_dn    = color.orange
+
+c_sup   = color.new(#00aa00, 70)
+c_sdn   = color.new(#ff180b, 70)
+
+up      = RROF_s >= 0
+s_up    = RROF_bs >=0 
+
+// ==================================== Plots ==========================================================
+
+// // Display the ATR & VOl Ratio values only on the indicator status line & in the Data Window
+// plotchar(shift, title = "Shift", char = "", color = color.white, editable=false, display=display.status_line + display.data_window)
+// plotchar(lbk_tr, title = "Avg Shift", char = "", color = color.aqua, editable=false, display=display.status_line + display.data_window)
+// plotchar(vola/lbk_vola, title = "Vol Ratio", char = "", color = color.yellow, editable=false, display=display.status_line + display.data_window)
+
+
+hline(0, 'Zero Line', c_zero, linestyle = hline.style_solid)
+// plot the band scale guide lines -- these lines will show/hide along with the EVEREX "Equalizer Bands Plot"
+hline(0.25 * bandscale, title = '1/4 Level', color=c_band, linestyle = hline.style_dotted, display = showhlines)
+hline(0.50 * bandscale, title = '2/4 Level', color=c_band, linestyle = hline.style_dotted, display = showhlines)
+hline(0.75 * bandscale, title = '3/4 Level', color=c_band, linestyle = hline.style_dotted, display = showhlines)
+hline(bandscale, title = '4/4 Level', color=c_band, linestyle = hline.style_dotted, display = showhlines)
+
+// Plot Bulls & Bears - these are optional plots and hidden by default  - adjust this section later 
+plot(ta.wma(bulls_avg, smooth), "Bulls", color = #11ff20, linewidth = 2, display = display.none)
+plot(ta.wma(bears_avg, smooth), "Bears", color = #d5180b, linewidth = 2, display = display.none)
+// =============================================================================
+// Plot Bias / Sentiment
+
+plot (RROF_bs, "Bias / Sentiment", style=plot.style_area, 
+  color = s_up ? c_sup : c_sdn, linewidth = 4, display = DispBias ) 
+
+// =============================================================================
+// Plot Price Strength & Relative Volume as stacked "equalizer bands" 
+// adding visualization option to make the bands joint or separate at the mid-scale mark 
+Eq_band_option = input.string("Joint", title = 'Band Option', options = ["Joint", "Separate"], group = grp_4)
+
+nPrice  = math.max(math.min(Pricea_n, 100), -100)
+nVol    = math.max(math.min(Vola_n, 100), -100)
+
+bar = bar_flow
+
+c_vol_grn   = color.new(#26a69a, 75)
+c_vol_red   = color.new(#ef5350, 75)
+
+cb_vol_grn  = color.new(#26a69a, 20)
+cb_vol_red  = color.new(#ef5350, 20)
+
+c_vol       = bar > 0 ? c_vol_grn : c_vol_red
+cb_vol      = bar > 0 ? cb_vol_grn : cb_vol_red
+
+vc_lo       = 0
+vc_hi       = nVol * bandscale / 100 / 2
+
+plotcandle(vc_lo, vc_hi, vc_lo, vc_hi , "Volume Band", c_vol, c_vol, bordercolor = cb_vol, display = DispBands)  // 下半部分, 最低点始终是0
+
+// 找到 下半部分 的 值
+// plot(nPrice, title='RSI', color=color.green, transp=0)
+
+
+c_pri_grn   = color.new(#3ed73e, 75)
+c_pri_red   = color.new(#ff870a, 75)
+
+cb_pri_grn  = color.new(#3ed73e, 20)
+cb_pri_red  = color.new(#ff870a, 20)
+
+c_pri       = bar > 0 ? c_pri_grn : c_pri_red
+cb_pri      = bar > 0 ? cb_pri_grn : cb_pri_red
+
+pc_lo_base  = Eq_band_option == "Joint" ? vc_hi : 0.50 * bandscale
+
+
+pc_lo       = pc_lo_base
+pc_hi       = pc_lo_base + math.abs(nPrice) * bandscale / 100 / 2
+
+plotcandle(pc_lo, pc_hi, pc_lo ,pc_hi , "Price Band", c_pri, c_pri, bordercolor = cb_pri, display = DispBands)  // 上半部分  开盘价 和 最高点一样, 收盘价和最低点一样, 所以这些蜡烛图没有影线
+
+// 找到 上半部分 的 值
+// plot(pc_hi, title='RSI', color=purple, transp=0)
+
+// print the normalized volume and price values - only on statys line and in the data window
+// these values are independant of the band scale or visualization options
+plotchar(nVol,    "Normalized Vol",   char = "", color = c_vol, editable = false, display = Disp_vals)
+plotchar(nPrice,  "Normalized Price", char = "", color = c_pri, editable = false, display = Disp_vals)
+
+
+// =============================================================================
+
+// =============================================================================
+// Plot main plot, smoothed plot and signal line
+
+plot(RROF, 'RROF Raw', color.new(#2470f0, 9), display=display.none)
+
+
+plot(RROF_s, 'RROF Smooth', color = color.rgb(255, 255, 255), linewidth = 2)    // 白色的 rrof
+plot(Signal, "Signal Line", up ? c_up : c_dn, 3)                                  // 彩色 的 signal
+
+// ===========================================================================================================
+//      basic alerts 
+// ===========================================================================================================
+
+Alert_up    = ta.crossover(RROF_s,0)
+Alert_dn    = ta.crossunder(RROF_s,0)
+Alert_swing = ta.cross(RROF_s,0)
+
+// "." in alert title for the alerts to show in the right order up/down/swing 
+alertcondition(Alert_up,    ".   RROF Crossing 0 Up",      "RROF Up - Buying Action Detected!")
+alertcondition(Alert_dn,    "..  RROF Crossing 0 Down",    "RROF Down - Selling Action Detected!")
+alertcondition(Alert_swing, "... RROF Crossing 0",         "RROF Swing - Possible Reversal")
+
+// ===========================================================================================================
+//      v2.0 Adding Markers for Key Patterns  
+// ===========================================================================================================
+
+// we can re-utilize the Normailize() function here too - but it's cleaner to have a separate ratio calc
+
+nPrice_abs = math.abs(nPrice)
+
+//EV_Ratio = 100 * Normalize(nPrice_abs, nVol)
+
+EV_Ratio = 100 * nPrice_abs / nVol
+
+// initial mapping of return ratios (to be revised)
+// -------------------------------------------------------
+// Case (1): Price > Vol => ratio > 120  =   Ease of Move (EoM)
+// Case (2): Price close to Vol  => ratio between 80 - 120  = Reasonable Balance
+// Case (3): Price less than Vol but reasonable => ratio between 80 - 50  = Drift / "nothing much to see here" bar 
+// Case (4): Price a lot less than Vol  => 50 or less  = Compression / Squat 
+// we're most interested in cases 1 & 4
+
+//plot (EV_Ratio)   // for validation only 
+
+is_positive     = nPrice > 0
+
+is_Compression  = EV_Ratio <= 50
+is_EoM          = EV_Ratio >= 120
+
+//Provide option to show/hide those EVEREX Markers - and an option for Compression bar 
+// - some folks would prefer a cross, others may prefer a circle - can adjust based on feedback
+// no option for Ease of Move, guessing the triangle has the right significance 
+
+var showMarkers = input.bool(true, 'Show EVEREX Markers ?')
+var Mshape  = input.string("Circles", "Compression Marker", options = ['Circles','Crosses'])
+
+
+
+SetShape(_x) =>
+    switch _x
+        'Circles'    => shape.circle
+        'Crosses'    => shape.cross 
+
+
+// Plot markers 画标号的, 可以忽略
+plotshape(showMarkers and is_EoM and is_positive ? 0 : na,      "EoM +ve", shape.triangleup,    color=color.green,  
+  location=location.absolute, size=size.auto, editable = false, display = display.pane)
+plotshape(showMarkers and is_EoM and not(is_positive) ? 0 : na, "EoM -ve", shape.triangledown,  color=color.red,    
+  location=location.absolute, size=size.auto, editable = false, display = display.pane)
+
+plotshape(showMarkers and is_Compression and is_positive ? 0 : na,        "Compression +ve", style = SetShape(Mshape), 
+  color=color.green, location=location.absolute, size = size.auto, editable = false, display = display.pane)
+plotshape(showMarkers and is_Compression and not(is_positive) ? 0 : na,   "Compression -ve", style = SetShape(Mshape), 
+  color=color.red, location=location.absolute, size=size.auto, editable = false, display = display.pane)
+
+
+//第二个指标, 彩虹 线
+mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'])
+smoothing_rainbow = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'])
+length_rainbow = input.int(120, minval=1, title='Length')
+x1_rainbow = input.float(5, '大Factor', minval=0.001, maxval=5)
+x2_rainbow = input.float(3.75, '小Factor', minval=0.001, maxval=5)
+HTFp = timeframe.period == '1' ? 60 : timeframe.period == '3' ? 20 : timeframe.period == '5' ? 48 : timeframe.period == '15' ? 96 : timeframe.period == '30' ? 48 : timeframe.period == '45' ? 32 : timeframe.period == '60' ? 24 : timeframe.period == '120' ? 84 : timeframe.period == '180' ? 56 : timeframe.period == '240' ? 42 : timeframe.period == 'D' ? 30 : timeframe.period == 'W' ? 52 : 12
+
+len = mode == 'Auto' ? HTFp : length_rainbow
+
+ma_function(source, length_rainbow) =>
+    if smoothing_rainbow == 'SMA'
+        ta.sma(source, len)
+    else
+        if smoothing_rainbow == 'EMA'
+            ta.ema(source, len)
+        else
+            if smoothing_rainbow == 'RMA'
+                ta.rma(source, len)
+            else
+                if smoothing_rainbow == 'WMA'
+                    ta.wma(source, len)
+                else
+                    if smoothing_rainbow == 'VWMA'
+                        ta.vwma(source, len)
+                    else
+                        ta.hma(source, len)
+
+// 拿到 高点和低点
+serie1 = close > open ? close : close < open ? open : high
+// 如果是绿线,  就拿到 close,  如果是红线,  就拿到 open,  如果 open == close, 就拿到 高点, 总之, 拿到高点
+serie2 = close < open ? close : close > open ? open : low
+// 拿到低点
+
+// x表示 1.618 黄金比例 系数
+
+big_bottom = ma_function(serie1, len) - x1_rainbow * ma_function(ta.tr(true), len)
+big_top = ma_function(serie2, len) + x1_rainbow * ma_function(ta.tr(true), len)
+
+big_bottom1 = big_bottom - x1_rainbow * ma_function(ta.tr(true), len)
+big_top1 = big_top + x1_rainbow * ma_function(ta.tr(true), len)
+
+
+small_bottom = ma_function(serie1, len) - x2_rainbow * ma_function(ta.tr(true), len)
+small_top = ma_function(serie2, len) + x2_rainbow * ma_function(ta.tr(true), len)
+
+small_bottom1 = small_bottom - x2_rainbow * ma_function(ta.tr(true), len)
+small_top1 = small_top + x2_rainbow * ma_function(ta.tr(true), len)
+
+// 中线, 某个 平均值 的 ma
+basis = ma_function(hlc3, len)
+
+
+// plot(big_top1, '大top1', color = color.blue)       // 1
+// plot(big_top, '大top0', color= color.red)          // 3
+// plot(big_bottom, '大bottom0', color= color.green)  // 8
+// plot(big_bottom1, '大bottom1', color.aqua)         //9
+// plot(basis, 'Middle Line', color=color.yellow)    // 5
+// plot(small_top1, '小top1', color = color.purple)  // 2
+// plot(small_top, '小top0', color=color.navy)       // 4
+// plot(small_bottom, '小bottom0', color=color.lime)   // 6
+// plot(small_bottom1, '小bottom1', color = color.teal)  // 7
+
+
+// 将 series float 数据存储在数组中
+float[] seriesArray = array.new_float()
+array.push(seriesArray, big_top1)
+array.push(seriesArray, big_top)
+array.push(seriesArray, big_bottom)
+array.push(seriesArray, big_bottom1)
+array.push(seriesArray, basis)
+array.push(seriesArray, small_top1)
+array.push(seriesArray, small_top)
+array.push(seriesArray, small_bottom)
+array.push(seriesArray, small_bottom1)
+
+array.sort(seriesArray, order.descending)
+
+
+// 在这里 画一下趋势
+
+mycolor = close > basis ? color.new(color.green, 90) : color.new(color.red, 90)
+
+bgcolor(mycolor)
+
+
+// 第三个指标 ATR
+
+atr_length = input.int(title='Length', defval=13, minval=1)
+smoothing = input.string(title='Smoothing', defval='RMA', options=['RMA', 'SMA', 'EMA', 'WMA'])
+m = input(1, 'Multiplier')
+src1 = input(high)
+src2 = input(low)
+pline = input(true, 'Show Price Lines')
+col1 = input(color.blue, 'ATR Text Color')
+col2 = input.color(color.teal, 'Low Text Color', inline='1')
+col3 = input.color(color.red, 'High Text Color', inline='2')
+
+collong = input.color(color.teal, 'Low Line Color', inline='1')
+colshort = input.color(color.red, 'High Line Color', inline='2')
+
+atr_ma_function(source, atr_length) =>
+    if smoothing == 'RMA'
+        ta.rma(source, atr_length)
+    else
+        if smoothing == 'SMA'
+            ta.sma(source, atr_length)
+        else
+            if smoothing == 'EMA'
+                ta.ema(source, atr_length)
+            else
+                ta.wma(source, atr_length)
+
+a = atr_ma_function(ta.tr(true), atr_length) * m
+x = atr_ma_function(ta.tr(true), atr_length) * m + src1
+x2 = src2 - atr_ma_function(ta.tr(true), atr_length) * m
+
+
+
+// 第四个 模块  fluid trades
+
+//      INDICATOR SETTINGS
+swing_length = input.int(10, title = 'Swing High/Low Length', group = 'Settings', minval = 1, maxval = 50)
+history_of_demand_to_keep = input.int(20, title = 'History To Keep', minval = 5, maxval = 50)
+box_width = input.float(10, title = 'Supply/Demand Box Width', group = 'Settings', minval = 1, maxval = 10, step = 0.5)
+
+//      INDICATOR VISUAL SETTINGS
+show_zigzag = input.bool(false, title = 'Show Zig Zag', group = 'Visual Settings', inline = '1')
+show_price_action_labels = input.bool(false, title = 'Show Price Action Labels', group = 'Visual Settings', inline = '2')
+
+supply_color = input.color(color.new(#EDEDED,70), title = 'Supply', group = 'Visual Settings', inline = '3')
+supply_outline_color = input.color(color.new(color.white,75), title = 'Outline', group = 'Visual Settings', inline = '3')
+
+demand_color = input.color(color.new(#00FFFF,70), title = 'Demand', group = 'Visual Settings', inline = '4')
+demand_outline_color = input.color(color.new(color.white,75), title = 'Outline', group = 'Visual Settings', inline = '4')
+
+bos_label_color = input.color(color.white, title = 'BOS Label', group = 'Visual Settings', inline = '5')
+poi_label_color = input.color(color.white, title = 'POI Label', group = 'Visual Settings', inline = '7')
+
+swing_type_color = input.color(color.black, title = 'Price Action Label', group = 'Visual Settings', inline = '8')
+zigzag_color = input.color(color.new(#000000,0), title = 'Zig Zag', group = 'Visual Settings', inline = '9')
+
+//
+//END SETTINGS
+//
+
+
+//
+//FUNCTIONS
+//
+
+//      FUNCTION TO ADD NEW AND REMOVE LAST IN ARRAY
+f_array_add_pop(array, new_value_to_add) =>
+    array.unshift(array, new_value_to_add)
+    array.pop(array)
+
+//      FUNCTION SWING H & L LABELS
+f_sh_sl_labels(array, swing_type) =>
+
+    var string label_text = na
+    if swing_type == 1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HH'
+        else
+            label_text := 'LH'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_down, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+    
+    else if swing_type == -1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HL'
+        else
+            label_text := 'LL'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_up, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+
+//      FUNCTION MAKE SURE SUPPLY ISNT OVERLAPPING
+f_check_overlapping(new_poi, box_array, atr) =>
+
+    atr_threshold = atr * 2
+    okay_to_draw = true
+
+    for i = 0 to array.size(box_array) - 1
+        top = box.get_top(array.get(box_array, i))
+        bottom = box.get_bottom(array.get(box_array, i))
+        poi = (top + bottom) / 2
+
+        upper_boundary = poi + atr_threshold
+        lower_boundary = poi - atr_threshold
+
+        if new_poi >= lower_boundary and new_poi <= upper_boundary
+            okay_to_draw := false
+            break
+        else 
+            okay_to_draw := true
+    okay_to_draw
+
+
+//      FUNCTION TO DRAW SUPPLY OR DEMAND ZONE
+f_supply_demand(value_array, bn_array, box_array, label_array, box_type, atr) =>
+
+    atr_buffer = atr * (box_width / 10)
+    box_left = array.get(bn_array, 0)
+    box_right = bar_index
+
+    var float box_top = 0.00
+    var float box_bottom = 0.00
+    var float poi = 0.00
+
+
+    if box_type == 1
+        box_top := array.get(value_array, 0)
+        box_bottom := box_top - atr_buffer
+        poi := (box_top + box_bottom) / 2
+    else if box_type == -1
+        box_bottom := array.get(value_array, 0)
+        box_top := box_bottom + atr_buffer
+        poi := (box_top + box_bottom) / 2
+
+    okay_to_draw = f_check_overlapping(poi, box_array, atr)
+    // okay_to_draw = true
+
+    //delete oldest box, and then create a new box and add it to the array
+    if box_type == 1 and okay_to_draw
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = supply_outline_color,
+             bgcolor = supply_color, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90),
+             bgcolor = color.new(poi_label_color,90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+
+    else if box_type == -1 and okay_to_draw
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = demand_outline_color,
+             bgcolor = demand_color, extend = extend.right,  text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90),
+             bgcolor = color.new(poi_label_color,90), extend = extend.right,  text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+
+
+//      FUNCTION TO CHANGE SUPPLY/DEMAND TO A BOS IF BROKEN
+f_sd_to_bos(box_array, bos_array, label_array, zone_type) =>
+
+    if zone_type == 1
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_top(array.get(box_array,i))
+            // if ta.crossover(close, level_to_break)
+            if close >= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), 'BOS' )
+                box.set_text_color( array.get(bos_array,0), bos_label_color)
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+
+
+    if zone_type == -1
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_bottom(array.get(box_array,i))
+            // if ta.crossunder(close, level_to_break)
+            if close <= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), 'BOS' )
+                box.set_text_color( array.get(bos_array,0), bos_label_color)
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+
+
+
+//      FUNCTION MANAGE CURRENT BOXES BY CHANGING ENDPOINT
+f_extend_box_endpoint(box_array) =>
+
+    for i = 0 to array.size(box_array) - 1
+        box.set_right(array.get(box_array, i), bar_index + 100)
+
+
+//
+//END FUNCTIONS
+//  
+
+
+//
+//CALCULATIONS
+//
+
+//      CALCULATE ATR 
+atr = ta.atr(50)
+
+//      CALCULATE SWING HIGHS & SWING LOWS
+swing_high = ta.pivothigh(high, swing_length, swing_length)
+swing_low = ta.pivotlow(low, swing_length, swing_length)
+
+//      ARRAYS FOR SWING H/L & BN 
+var swing_high_values = array.new_float(5,0.00)
+var swing_low_values = array.new_float(5,0.00)
+
+var swing_high_bns = array.new_int(5,0)
+var swing_low_bns = array.new_int(5,0)
+
+//      ARRAYS FOR SUPPLY / DEMAND
+var current_supply_box = array.new_box(history_of_demand_to_keep, na)
+var current_demand_box = array.new_box(history_of_demand_to_keep, na)
+
+//      ARRAYS FOR SUPPLY / DEMAND POI LABELS
+var current_supply_poi = array.new_box(history_of_demand_to_keep, na)
+var current_demand_poi = array.new_box(history_of_demand_to_keep, na)
+
+//      ARRAYS FOR BOS
+var supply_bos = array.new_box(5, na)
+var demand_bos = array.new_box(5, na)
+//
+//END CALCULATIONS
+//
+
+//      NEW SWING HIGH
+if not na(swing_high)
+
+    //MANAGE SWING HIGH VALUES
+    f_array_add_pop(swing_high_values, swing_high)
+    f_array_add_pop(swing_high_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_high_values, 1)
+
+    f_supply_demand(swing_high_values, swing_high_bns, current_supply_box, current_supply_poi, 1, atr)
+
+//      NEW SWING LOW
+else if not na(swing_low)
+
+    //MANAGE SWING LOW VALUES
+    f_array_add_pop(swing_low_values, swing_low)
+    f_array_add_pop(swing_low_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_low_values, -1)
+    
+    f_supply_demand(swing_low_values, swing_low_bns, current_demand_box, current_demand_poi, -1, atr)
+
+
+f_sd_to_bos(current_supply_box, supply_bos, current_supply_poi, 1)
+f_sd_to_bos(current_demand_box, demand_bos, current_demand_poi, -1)
+
+f_extend_box_endpoint(current_supply_box)
+f_extend_box_endpoint(current_demand_box)
+
+//ZIG ZAG
+h = ta.highest(high, swing_length * 2 + 1)
+l = ta.lowest(low, swing_length * 2 + 1)
+f_isMin(len) =>
+    l == low[len]
+f_isMax(len) =>
+    h == high[len]
+
+var dirUp = false
+var lastLow = high * 100
+var lastHigh = 0.0
+var timeLow = bar_index
+var timeHigh = bar_index
+var line li = na
+
+f_drawLine() =>
+    _li_color = show_zigzag ? zigzag_color : color.new(#ffffff,100)
+    line.new(timeHigh - swing_length, lastHigh, timeLow - swing_length, lastLow, xloc.bar_index, color=_li_color, width=2)
+
+if dirUp
+    if f_isMin(swing_length) and low[swing_length] < lastLow
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+
+    if f_isMax(swing_length) and high[swing_length] > lastLow
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        dirUp := false
+        li := f_drawLine()
+        li
+
+if not dirUp
+    if f_isMax(swing_length) and high[swing_length] > lastHigh
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+    if f_isMin(swing_length) and low[swing_length] < lastHigh
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        dirUp := true
+        li := f_drawLine()
+        if f_isMax(swing_length) and high[swing_length] > lastLow
+            lastHigh := high[swing_length]
+            timeHigh := bar_index
+            dirUp := false
+            li := f_drawLine()
+            li
+
+
+
+var float supply_bottom = 0
+var float supply_top = 0
+var float supply_left = 0
+
+
+var float demand_bottom = 0
+var float demand_top = 0
+var float demand_left = 0
+
+// log.info("*************** start ****************")
+for i = 0 to array.size(current_supply_box) - 1
+    mybox = array.get(current_supply_box, i)
+    if not na(mybox.get_bottom())
+        // log.info("supply i =  {0},  top = {1}, bottom = {2}", str.tostring(i), str.tostring(mybox.get_top()), str.tostring(mybox.get_bottom()))
+        supply_bottom := mybox.get_bottom()
+        supply_top := mybox.get_top()
+        supply_left := mybox.get_left()
+        break
+
+for i = 0 to array.size(current_demand_box) - 1
+    mybox = array.get(current_demand_box, i)
+    if not na(mybox.get_bottom())
+        // log.info("demand i =  {0},  top = {1}, bottom = {2}", str.tostring(i), str.tostring(mybox.get_top()), str.tostring(mybox.get_bottom()))
+        demand_bottom := mybox.get_bottom()
+        demand_top := mybox.get_top()
+        demand_left := mybox.get_left()
+        break
+
+
+// 第五个指标  WWVLB
+trendDetectionLength = input(2)
+showDistributionBelowZero = input(false)
+mov = close > close[1] ? 1 : close < close[1] ? -1 : 0
+
+trend = close
+
+trend := mov != 0 and mov != mov[1] ? mov : nz(trend[1])
+isTrending = ta.rising(close, trendDetectionLength) or ta.falling(close, trendDetectionLength)  //abs(close-close[1]) >= dif
+
+wave = close
+vol = close
+
+wave := trend != nz(wave[1]) and isTrending ? trend : nz(wave[1])
+vol := wave == wave[1] ? nz(vol[1]) + volume : volume
+up_wwvlb = wave == 1 ? vol : 0
+dn = showDistributionBelowZero ? wave == 1 ? 0 : wave == -1 ? -vol : vol : wave == 1 ? 0 : vol
+// plot(up_wwvlb, style=plot.style_histogram, color=color.new(color.green, 0), linewidth=3)
+// plot(dn, style=plot.style_histogram, color=color.new(color.red, 0), linewidth=3)
+
+
+// mycolor = (wave == 1) ? color.new(color.green, 90) : color.new(color.red, 90)
+// bgcolor(mycolor)
+
+
+
+
+// 下面开始 写 策略
+// 
+
+d_l_Signal_limit = input.float(0, minval=-1000, title='多头趋势， 做多时 Signal Line 应低于', group="机械蛙")
+d_s_Signal_limit = input.float(45, minval=-1000, title='多头趋势， 做空时 Signal Line 应高于', group="机械蛙")
+
+k_l_Signal_limit = input.float(-40, minval=-1000, title='空头趋势， 做多时 Signal Line 应低于', group="机械蛙")
+k_s_Signal_limit = input.float(0, minval=-1000, title='空头趋势， 做空时 Signal Line 应高于', group="机械蛙")
+
+
+trade_type   = input.string(defval = '开所有单'  , title =  "交易类型" , options=["开所有单", "只开多单", "只开空单", "只开趋势单"], group="机械蛙")
+
+stop_k_num = input.int(5, minval=1, title='止损时往前找前高和前低的距离', group="机械蛙")
+
+join_p = input.float(0.02, minval=0, title='每次进场 比例?', group="机械蛙")
+profit_p = input.float(0.4, minval=0, title='每次止盈 比例?', group="机械蛙")
+
+
+d_l_supply_enable  = input.bool(true, '多头开多 若盈亏比1:1 止盈处超出上方阻力位置，则不开单', group = "机械蛙")
+d_s_demand_enable  = input.bool(true, '多头开空 若盈亏比1:1 止盈处超出下方支撑位置，则不开单', group = "机械蛙")
+
+k_l_supply_enable  = input.bool(true, '空头开多 若盈亏比1:1 止盈处超出上方阻力位置，则不开单', group = "机械蛙")
+k_s_demand_enable  = input.bool(true, '空头开空 若盈亏比1:1 止盈处超出下方支撑位置，则不开单', group = "机械蛙")
+
+Counter_trend  = input.bool(true, '逆趋势条件反转(bug版本)', group = "机械蛙")
+
+uptrend_short_enable  = input.bool(false, '多头做空 逆趋势条件', group = "机械蛙")
+downtrend_long_enable  = input.bool(false, '空头做多 逆趋势条件', group = "机械蛙")
+
+uptrend_short_k_num = input.int(1, minval=1, title='多头做空 .X根K线内，有K线最高点(包括上影线)触及到Fluidtrades产生的白色阻力区，且条件123触发时，该阻力区还存在未被破除', group="机械蛙")
+downtrend_long_k_num = input.int(1, minval=1, title='空头做多 x根K线内，有K线最低点(包括下影线)触及到Fluidtrades产生的绿色支撑区，且条件123触发时，该支撑区还存在未被破除', group="机械蛙")
+
+
+cnadle_limit = input.float(100, minval=-1000, title='蜡烛图条件 大于等于  (默认100)', group="机械蛙")
+
+
+d_l_rainbow_l = input.int(2, minval=1,title= '多头做多, 彩虹图 ↑', group="机械蛙")
+d_l_rainbow_r = input.int(5, minval=1,title= '多头做多, 彩虹图 ↓', group="机械蛙")
+
+d_l_rainbow_l_v= array.get(seriesArray, d_l_rainbow_l - 1)
+d_l_rainbow_r_v= array.get(seriesArray, d_l_rainbow_r - 1)
+
+d_s_rainbow_l = input.int(1, minval=1,title= '多头做空, 彩虹图 ↑', group="机械蛙")
+d_s_rainbow_r = input.int(3, minval=1,title= '多头做空, 彩虹图 ↓', group="机械蛙")
+
+d_s_rainbow_l_v= array.get(seriesArray, d_s_rainbow_l - 1)
+d_s_rainbow_r_v= array.get(seriesArray, d_s_rainbow_r - 1)
+
+k_l_rainbow_l = input.int(7, minval=1,title= '空头做多, 彩虹图 ↑', group="机械蛙")
+k_l_rainbow_r = input.int(9, minval=1,title= '空头做多, 彩虹图 ↓', group="机械蛙")
+
+k_l_rainbow_l_v= array.get(seriesArray, k_l_rainbow_l - 1)
+k_l_rainbow_r_v= array.get(seriesArray, k_l_rainbow_r - 1)
+
+k_s_rainbow_l = input.int(5, minval=1,title= '空头做空, 彩虹图 ↑', group="机械蛙")
+k_s_rainbow_r = input.int(8, minval=1,title= '空头做空, 彩虹图 ↓', group="机械蛙")
+
+k_s_rainbow_l_v= array.get(seriesArray, k_s_rainbow_l - 1)
+k_s_rainbow_r_v= array.get(seriesArray, k_s_rainbow_r - 1)
+
+
+// 找当 距离 当前 最近 的方块,  首先 bar_index - left >= 距离     前低/前高  触及到了 方块, 但是 该方块还在
+
+previous_high = ta.highest(high, stop_k_num)
+previous_low = ta.lowest(low, stop_k_num)
+
+// 根方块有关的 前高/前低
+box_previous_high = math.max(ta.highest(high, uptrend_short_k_num), close)
+box_previous_low = math.min(ta.lowest(low, downtrend_long_k_num), close)
+
+uptrend_short_box_cond = (((bar_index - supply_left) >= uptrend_short_k_num) and (box_previous_high >= supply_bottom) and uptrend_short_enable) or not(uptrend_short_enable)
+downtrend_long_box_cond = (((bar_index - demand_left) >= downtrend_long_k_num) and (box_previous_low <= demand_top) and downtrend_long_enable)  or not(downtrend_long_enable)
+
+trade_all = trade_type ==  '开所有单'
+trade_long = trade_type ==  '只开多单'
+trade_short = trade_type ==  '只开空单'
+trade_trend = trade_type ==  '只开趋势单'
+
+
+// 俩格子相加是否超过100
+candle_cond = (pc_hi >= cnadle_limit)
+
+// rrof 的金叉和死叉
+l_gold_RROF = ta.crossover(RROF_s, Signal)
+s_dead_RROF = ta.crossover(Signal, RROF_s)
+
+
+
+// 趋势应该 由 中线 5 号线 决定
+//上涨趋势
+uptrend = close > basis
+
+//下跌趋势
+downtrend = close < basis
+
+
+// 定义 K 线的开、高、低、收数据
+open_val = open
+high_val = high
+low_val = low
+close_val = close
+
+// 判断 K 线是涨还是跌
+is_bullish = close > open
+is_bearish = close < open
+
+
+// atr 上线 x
+// atr 下线 x2
+
+
+// 多单止损 当前 - 当前 atr 下线
+long_stop = close - x2
+// 空单止损 当前atr上线 - 当前
+short_stop = x - close
+
+
+// 加了 d_l_supply_enable 条件, 表示 如果条件满足 就 不开单
+// 没加 d_l_supply_enable条件,  就是无条件开单
+
+d_long_over_supply = false
+d_short_over_demand = false
+k_long_over_supply = false
+k_short_over_demand = false
+
+
+// 多头开多 盈亏比 是否 超过 上方阻力?
+if Counter_trend
+    d_long_over_supply := (((close + long_stop) > supply_top) and d_l_supply_enable) or not(d_l_supply_enable)
+
+    // 多头开空 盈亏比 是否 超过 下方支撑?
+    d_short_over_demand := (((close - short_stop) < demand_bottom) and d_s_demand_enable) or not(d_s_demand_enable)
+
+    // 空头开多 盈亏比 是否 超过 上方阻力?
+    k_long_over_supply := (((close + long_stop) > supply_top) and k_l_supply_enable) or not (k_l_supply_enable)
+
+    // 空头开空 盈亏比 是否 超过 下方支撑?
+    k_short_over_demand := (((close - short_stop) < demand_bottom) and k_s_demand_enable) or not (k_s_demand_enable)
+
+
+if not(Counter_trend)
+    d_long_over_supply := (((close + long_stop) <= supply_top) and d_l_supply_enable) or not(d_l_supply_enable)
+
+    // 多头开空 盈亏比 是否 超过 下方支撑?
+    d_short_over_demand := (((close - short_stop) >= demand_bottom) and d_s_demand_enable) or not(d_s_demand_enable)
+
+    // 空头开多 盈亏比 是否 超过 上方阻力?
+    k_long_over_supply := (((close + long_stop) <= supply_top) and k_l_supply_enable) or not (k_l_supply_enable)
+
+    // 空头开空 盈亏比 是否 超过 下方支撑?
+    k_short_over_demand := (((close - short_stop) >= demand_bottom) and k_s_demand_enable) or not (k_s_demand_enable)
+
+
+// 是否是 绿色?
+wwv_is_green = (wave == 1) 
+
+// 开单条件变更
+// 后续所有的规则1上穿下穿都作为第一优先级信号，后续所有条件作为第二优先级信号。
+// 当第一信号触发后，若为多单，收盘为红K，则在下根K线内触发全部第二条件也可以进场；当第一信号触发后，若为空单，收盘为绿K，则在下根K线内触发全部第二条件也可以进场（此处设置开关，关闭则要求所有条件在同1根K线内触发）
+// 全部的条件可以在 连续的 两条k 线内 触发
+
+// 多头趋势时：
+// 多单规则为:
+// 1.白色RROF从下向上穿过红蓝线Signal Line，上穿时红蓝线应低于0(设置可更改值)
+// 2.后方柱体深浅部分相加超过X(设置可更改数值)
+// 3.对应K线为绿色收盘
+// 4.若盈亏比1:1止盈处超出上方白色阻力位置，则不开单(可做开关)
+// 5.Weis Wave Volume柱体为绿色(请设置开关，多多 多空 空多 空空四个，同信号线那样，用于测试筛选效果)
+// 6.收盘价格在彩虹图第2-5根线内(设置可变 第X根到X根范围内，1-9为无限制)
+
+
+// 空单规则为:
+// 1.白色RROF从上向下穿过红蓝线Signal Line，下穿时红蓝线应高于45(设置可更改值)
+// 2.后方柱体深浅部分相加超过100(深色浅色最大值各为100，相加最高为200)
+// 3.对应K线为红色收盘
+// 4.X根(设置可修改默认为1)K线内，有K线最高点(包括上影线)触及到Fluidtrades产生的白色阻力区，且条件123触发时，该阻力区还存在未被破除
+// 5.若盈亏比1:1止盈处超出下方绿色阻力位置，则不开单！(做开关)
+// 6.Weis Wave Volume柱体为红色(请设置开关，多多 多空 空多 空空四个，同信号线那样，用于测试筛选效果)
+// 7.收盘价格在彩虹图第1-3根线内(设置可变 第X根到X根范围内，1-9为无限制)
+
+
+// 空头趋势时：
+// 多单规则为:
+// 1.白色RROF从下向上穿过红蓝线Signal Line，上穿时红蓝线应低于-40(设置可更改值)
+// 2.后方柱体深浅部分相加超过100(深色浅色最大值各为100，相加最高为200)
+// 3.对应K线为红色绿色收盘
+// 4.X根(设置可修改默认为1)K线内，有K线最低点(包括下影线)触及到Fluidtrades产生的绿色支撑区，且条件123触发时，该支撑区还存在未被破除
+// 5.若盈亏比1:1止盈处超出上方白色阻力位置，则不开单！(可做开关或后期加入)
+// 6.收盘价格在彩虹图第7-9根线内(设置可变 第X根到X根范围内，1-9为无限制)
+// 7.Weis Wave Volume柱体为绿色(请设置开关，多多 多空 空多 空空四个，同信号线那样，用于测试筛选效果)
+
+
+// 空单规则为:
+// 1.白色RROF从上向下穿过红蓝线Signal Line，下穿时红蓝线应高于0(设置可更改值)
+// 2.后方柱体深浅部分相加超过(深色浅色最大值各为100，相加最高为200)
+// 3.对应K线为红色收盘
+// 4.若盈亏比1:1处超出下方绿色支撑位置，则不开单！(可做开关或后期加入)
+// 5.Weis Wave Volume柱体为红色(请设置开关，多多 多空 空多 空空四个，同信号线那样，用于测试筛选效果)
+// 6.收盘价格在彩虹图第5-8根线内(设置可变 第X根到X根范围内，1-9为无限制)
+
+
+// 加入只做空单 只做多单选项 只做趋势单 便于测试
+
+
+// 条件1
+d_longCondition1 = l_gold_RROF and (Signal < d_l_Signal_limit)
+d_shortCondition1 = s_dead_RROF and (Signal > d_s_Signal_limit)
+k_longCondition1 = l_gold_RROF and (Signal < k_l_Signal_limit)
+k_shortCondition1 = s_dead_RROF and (Signal > k_s_Signal_limit)
+
+// 条件2
+d_longCondition2 = candle_cond and is_bullish and d_long_over_supply and wwv_is_green and (close < d_l_rainbow_l_v and close > d_l_rainbow_r_v)
+
+d_shortCondition2 = candle_cond and is_bearish and uptrend_short_box_cond and d_short_over_demand and not(wwv_is_green) and (close < d_s_rainbow_l_v and close > d_s_rainbow_r_v)
+
+k_longCondition2 = candle_cond and is_bullish and downtrend_long_box_cond and k_long_over_supply and wwv_is_green and (close < k_l_rainbow_l_v and close > k_l_rainbow_r_v)
+k_shortCondition2 = candle_cond and is_bearish and k_short_over_demand and not(wwv_is_green) and (close < k_s_rainbow_l_v and close > k_s_rainbow_r_v)
+
+
+
+// 多头趋势  做多
+d_longCondition  =  uptrend and d_longCondition1 and  d_longCondition2
+
+//多头趋势 做空
+d_shortCondition = uptrend and d_shortCondition1 and d_shortCondition2
+
+// 空头趋势  做多
+k_longCondition  =  downtrend and k_longCondition1  and  k_longCondition2
+
+//空头趋势 做空
+k_shortCondition = downtrend and k_shortCondition1 and k_shortCondition2
+
+
+// 画出多和空的信号
+longCondition = (trade_all  or   trade_long  or   (trade_trend and uptrend)) and  (d_longCondition or k_longCondition) 
+shortCondition = (trade_all  or   trade_short  or   (trade_trend and downtrend))  and  (d_shortCondition or  k_shortCondition)
+
+bgcolor(   longCondition  ? darkGreen : na)
+bgcolor(   shortCondition ? darkRed : na)
+
+
+
