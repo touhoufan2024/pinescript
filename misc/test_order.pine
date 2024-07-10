@@ -1,0 +1,128 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ashchippy
+
+//@version=5
+strategy("我的策略", overlay=true, pyramiding = 1)
+
+red = color.rgb(231, 17, 17)
+green = color.rgb(6, 245, 105, 20)
+blue = color.rgb(82, 112, 243)
+orange = color.rgb(255, 145, 0, 20)
+purple = color.rgb(204, 0, 255)
+white = #f4f5f8
+lightRed = color.new(color.red, 80)  // 更透明的红色
+darkRed = color.new(color.red, 20)  // 更不透明的红色
+lightGreen = color.new(color.green, 80)  // 更透明的绿色
+darkGreen = color.new(color.green, 20)  // 更不透明的绿色
+gold = #f1e100
+
+
+// 以下是所有月份的简称：
+
+// 一月 (January) - Jan
+// 二月 (February) - Feb
+// 三月 (March) - Mar
+// 四月 (April) - Apr
+// 五月 (May) - May
+// 六月 (June) - Jun
+// 七月 (July) - Jul
+// 八月 (August) - Aug
+// 九月 (September) - Sep
+// 十月 (October) - Oct
+// 十一月 (November) - Nov
+// 十二月 (December) - Dec
+
+enableFilter = input(true,  "Enable Backtesting Range Filtering")
+fromDate     = input.time(timestamp("20 Jan 2023 00:00 +0300"), "Start Date")
+toDate       = input.time(timestamp("20 Jan 2024 00:00 +0300"), "End Date")
+
+tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
+
+
+var int long_num = 0
+var int short_num = 0
+
+
+longCondition = close > close[1] //and tradeDateIsAllowed
+
+if longCondition
+    short_num := 0
+    long_id = "Long" + str.tostring(long_num)
+    long_num := long_num + 1
+    strategy.entry(long_id, strategy.long, qty = 100)
+
+    strategy.exit("止盈1", long_id, qty_percent = 30, limit = close * 1.02)
+    strategy.exit("止损", long_id, qty_percent = 100, stop = close * 0.8)
+    
+    strategy.exit("止盈2", long_id, qty_percent = 30, limit = close * 1.04)
+    strategy.exit("止盈3", long_id, qty_percent = 40, limit = close * 1.06)
+
+
+
+    log.error("long开仓 {0}:  价格: {1}", long_id, str.tostring(close))
+
+
+
+// if longCondition
+//     log.info("syminfo.basecurrency: {0} strategy.position_entry_name: {1} strategy.opentrades: {2}", syminfo.basecurrency, strategy.position_entry_name, strategy.opentrades)
+//     log.info("头寸:  {0} 平均成本 {1}, 盈利数量 {2}", str.tostring(strategy.position_size), str.tostring(strategy.position_avg_price), str.tostring(strategy.wintrades))
+
+
+// if tradeDateIsAllowed
+//     log.info("**********start***********")
+//     for i = 0 to strategy.opentrades - 1
+//         log.info("当前仓位 {0}, 入仓成本价: {1}", str.tostring(strategy.opentrades.entry_id(i)), str.tostring(strategy.opentrades.entry_price(i)))
+//         if (close > strategy.opentrades.entry_price(i) * 1.1)
+//             log.warning("{0} 平仓 出场, 止盈价格 {1} 当前价格 {2} ", strategy.opentrades.entry_id(i), str.tostring(strategy.opentrades.entry_price(i) * 1.1), str.tostring(close))
+//             // strategy.close(strategy.opentrades.entry_id(i))
+//             strategy.order("sell", strategy.short, 100)
+
+//     log.info("********** end ***********")
+
+
+
+// 以下是 空单的 东西, 我们先 忽略
+
+shortCondition = close < close[1] and tradeDateIsAllowed and false
+
+if (shortCondition)
+    long_num := 0
+
+    short_id = "Short" + str.tostring(short_num)
+    short_num := short_num + 1
+    strategy.entry(short_id, strategy.short, qty = 100)
+    log.warning("{0}: {1}", short_id, str.tostring(close))
+
+
+
+// 获取 10 分钟的收盘价
+// tenMinClose = request.security(syminfo.tickerid, "10", close)
+
+// // 获取 30 分钟的收盘价
+// thirtyMinClose = request.security(syminfo.tickerid, "30", close)
+
+// // 获取 1 小时的收盘价
+// oneHourClose = request.security(syminfo.tickerid, "60", close)
+
+// // 获取 2 小时的收盘价
+// twoHourClose = request.security(syminfo.tickerid, "120", close)
+
+// 打印一些东西
+// plotchar(close, "close", color = color.green, char = "")
+// plotchar(tenMinClose, "10", color = color.red, char = "")
+// plotchar(thirtyMinClose, "30", color = color.green, char = "")
+// plotchar(oneHourClose, "60", color = color.blue, char = "")
+// plotchar(twoHourClose, "120", color = color.black, char = "")
+
+
+// 在图表上绘制不同时间框架的收盘价
+// plot(tenMinClose, color=color.red, title="10 Min Close")
+// plot(thirtyMinClose, color=color.green, title="30 Min Close")
+// plot(oneHourClose, color=color.blue, title="1 Hour Close")
+// plot(twoHourClose, color=color.black, title="2 Hour Close")
+
+
+
+// bgcolor(   longCondition  ? darkGreen : na)
+
+// bgcolor(   shortCondition ? darkRed : na)
