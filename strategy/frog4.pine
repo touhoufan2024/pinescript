@@ -872,6 +872,7 @@ join_p = input.float(0.02, minval=0, title='每次进场 比例?', group="机械
 profit_p = input.float(0.4, minval=0, title='每次止盈 比例?', group="机械蛙")
 
 
+// 根据 止损 来算出1:1的止盈, 看是否 超过了 压力区, 如果超过了, 那么就不要开单
 d_l_supply_enable  = input.bool(true, '多头开多 若盈亏比1:1 止盈处超出上方阻力位置，则不开单', group = "机械蛙")
 d_s_demand_enable  = input.bool(true, '多头开空 若盈亏比1:1 止盈处超出下方支撑位置，则不开单', group = "机械蛙")
 
@@ -880,8 +881,8 @@ k_s_demand_enable  = input.bool(true, '空头开空 若盈亏比1:1 止盈处超
 
 Counter_trend  = input.bool(true, '逆趋势条件反转(bug版本)', group = "机械蛙")
 
-uptrend_short_enable  = input.bool(false, '多头做空 逆趋势条件', group = "机械蛙")
-downtrend_long_enable  = input.bool(false, '空头做多 逆趋势条件', group = "机械蛙")
+uptrend_short_enable  = input.bool(false, '多头做空 逆趋势条件, 和下面的配套使用', group = "机械蛙")
+downtrend_long_enable  = input.bool(false, '空头做多 逆趋势条件, 和下面的配套使用', group = "机械蛙")
 
 uptrend_short_k_num = input.int(1, minval=1, title='多头做空 .X根K线内，有K线最高点(包括上影线)触及到Fluidtrades产生的白色阻力区，且条件123触发时，该阻力区还存在未被破除', group="机械蛙")
 downtrend_long_k_num = input.int(1, minval=1, title='空头做多 x根K线内，有K线最低点(包括下影线)触及到Fluidtrades产生的绿色支撑区，且条件123触发时，该支撑区还存在未被破除', group="机械蛙")
@@ -1058,6 +1059,12 @@ wwv_is_green = (wave == 1)
 // 加入只做空单 只做多单选项 只做趋势单 便于测试
 
 
+enableFilter = input(false,  "Enable Backtesting Range Filtering")
+fromDate     = input.time(timestamp("20 Jan 2023 00:00 +0300"), "Start Date")
+toDate       = input.time(timestamp("20 Jan 2024 00:00 +0300"), "End Date")
+
+tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
+
 // 条件1
 d_longCondition1 = l_gold_RROF and (Signal < d_l_Signal_limit)
 d_shortCondition1 = s_dead_RROF and (Signal > d_s_Signal_limit)
@@ -1070,22 +1077,29 @@ d_longCondition2 = candle_cond and is_bullish and d_long_over_supply and wwv_is_
 d_shortCondition2 = candle_cond and is_bearish and uptrend_short_box_cond and d_short_over_demand and not(wwv_is_green) and (close < d_s_rainbow_l_v and close > d_s_rainbow_r_v)
 
 k_longCondition2 = candle_cond and is_bullish and downtrend_long_box_cond and k_long_over_supply and wwv_is_green and (close < k_l_rainbow_l_v and close > k_l_rainbow_r_v)
+
 k_shortCondition2 = candle_cond and is_bearish and k_short_over_demand and not(wwv_is_green) and (close < k_s_rainbow_l_v and close > k_s_rainbow_r_v)
 
 
 
 // 多头趋势  做多
-d_longCondition  =  uptrend and d_longCondition1 and  d_longCondition2
+d_longCondition  =  uptrend and d_longCondition1 and  d_longCondition2 and tradeDateIsAllowed
 
 //多头趋势 做空
-d_shortCondition = uptrend and d_shortCondition1 and d_shortCondition2
+d_shortCondition = uptrend and d_shortCondition1 and d_shortCondition2 and tradeDateIsAllowed
 
 // 空头趋势  做多
-k_longCondition  =  downtrend and k_longCondition1  and  k_longCondition2
+k_longCondition  =  downtrend and k_longCondition1  and  k_longCondition2 and tradeDateIsAllowed
 
 //空头趋势 做空
-k_shortCondition = downtrend and k_shortCondition1 and k_shortCondition2
+k_shortCondition = downtrend and k_shortCondition1 and k_shortCondition2 and tradeDateIsAllowed
 
+
+if tradeDateIsAllowed
+    log.info("多头做多  条件1 {0}, 条件2 {1}", d_longCondition1, d_longCondition2)
+    log.info("多头做空  条件1 {0}, 条件2 {1}", d_shortCondition1, d_shortCondition2)
+    log.info("空头做多  条件1 {0}, 条件2 {1}", k_longCondition1, k_longCondition2)
+    log.info("空头做空  条件1 {0}, 条件2 {1}", k_shortCondition1, k_shortCondition2)
 
 // 画出多和空的信号
 longCondition = (trade_all  or   trade_long  or   (trade_trend and uptrend)) and  (d_longCondition or k_longCondition) 
@@ -1094,5 +1108,29 @@ shortCondition = (trade_all  or   trade_short  or   (trade_trend and downtrend))
 bgcolor(   longCondition  ? darkGreen : na)
 bgcolor(   shortCondition ? darkRed : na)
 
+var int long_num = 0
+
+if longCondition
+    long_id = "Long" + str.tostring(long_num)
+    long_num += 1
+
+    my_qty = strategy.equity * join_p / close
+    strategy.entry(long_id, strategy.long, qty = my_qty)
+
+    strategy.exit(long_id + "止盈止损1", long_id, qty_percent = profit_p * 100, limit = close + long_stop, stop = close - long_stop)
+    strategy.exit(long_id + "止盈止损2", long_id, qty_percent = profit_p * ((1 - profit_p) * 100), limit = close + long_stop * 2, stop = close - long_stop)
+    strategy.exit(long_id + "止盈止损3", long_id, qty_percent = 100 - profit_p * 100 - profit_p * ((1 - profit_p) * 100), limit = close + long_stop * 3, stop = close - long_stop)
 
 
+var int short_num = 0
+
+if shortCondition
+    short_id = "Short" + str.tostring(short_num)
+    short_num += 1
+
+    my_qty = strategy.equity * join_p / close
+    strategy.entry(short_id, strategy.short, qty = my_qty)
+
+    strategy.exit(short_id + "止盈止损1", short_id, qty_percent = profit_p * 100, limit = close - short_stop, stop = close + short_stop)
+    strategy.exit(short_id + "止盈止损2", short_id, qty_percent = profit_p * ((1 - profit_p) * 100), limit = close - short_stop * 2, stop = close + short_stop)
+    strategy.exit(short_id + "止盈止损3", short_id, qty_percent = 100 - profit_p * 100 - profit_p * ((1 - profit_p) * 100), limit = close - short_stop * 3, stop = close + short_stop)
