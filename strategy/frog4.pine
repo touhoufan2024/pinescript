@@ -1121,7 +1121,7 @@ if longCondition
 
     my_qty = strategy.equity * join_p / close
 
-    strategy.entry(long_id, strategy.long, qty = my_qty, comment = long_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty))
+    strategy.entry(long_id, strategy.long, qty = my_qty, comment = long_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty) + "_" + str.tostring(close + long_stop) + "_" + str.tostring(close - long_stop))
 
     log.warning("***long_start****")
     qtyPercentSum := 0
@@ -1149,7 +1149,7 @@ if shortCondition
 
     my_qty = strategy.equity * join_p / close
     // strategy.entry(short_id, strategy.short, qty = my_qty)
-    strategy.entry(short_id, strategy.short, qty = my_qty, comment = short_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty))
+    strategy.entry(short_id, strategy.short, qty = my_qty, comment = short_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty) + "_" + str.tostring(close - short_stop) + "_" + str.tostring(close + short_stop))
 
     log.error("***short_start****")
     qtyPercentSum := 0
