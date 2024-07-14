@@ -872,12 +872,6 @@ join_p = input.float(0.02, minval=0, title='每次进场 比例?', group="机械
 profit_p = input.float(0.4, minval=0, title='每次止盈 比例?', group="机械蛙")
 profit_count = input.int(5, minval=1, title='分批止盈次数', group="机械蛙")
 
-max_potion = input.float(0.2, minval=0, title='最大持仓比例 / 由于tv限制 需要手动设置单价和初始资金', group="机械蛙")
-initial_capital = input.float(100000, minval=0, title='初始资金', group="机械蛙")
-single_price = input.float(100, minval=0, title='手动设置单价', group="机械蛙")
-
-strategy.risk.max_position_size(initial_capital* max_potion / single_price)
-
 
 easy_second_cond  = input.bool(true, '放宽第二条件', group = "机械蛙")
 
