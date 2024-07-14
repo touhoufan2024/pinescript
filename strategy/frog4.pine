@@ -879,6 +879,8 @@ single_price = input.float(100, minval=0, title='手动设置单价', group="机
 strategy.risk.max_position_size(initial_capital* max_potion / single_price)
 
 
+easy_second_cond  = input.bool(true, '放宽第二条件', group = "机械蛙")
+
 // 根据 止损 来算出1:1的止盈, 看是否 超过了 压力区, 如果超过了, 那么就不要开单
 d_l_supply_enable  = input.bool(true, '多头开多 若盈亏比1:1 止盈处超出上方阻力位置，则不开单', group = "机械蛙")
 d_s_demand_enable  = input.bool(true, '多头开空 若盈亏比1:1 止盈处超出下方支撑位置，则不开单', group = "机械蛙")
@@ -1088,18 +1090,34 @@ k_longCondition2 = candle_cond and is_bullish and downtrend_long_box_cond and k_
 k_shortCondition2 = candle_cond and is_bearish and k_short_over_demand and not(wwv_is_green) and (close < k_s_rainbow_l_v and close > k_s_rainbow_r_v)
 
 
+// 当第一信号触发后，若为多单，收盘为红K，则在下根K线内触发全部第二条件也可以进场；  上一条有第一信号, 且 是红k
+// 当第一信号触发后，若为空单，收盘为绿K，则在下根K线内触发全部第二条件也可以进场    上一条有第一信号, 且 是绿k
+//（此处设置开关，关闭则要求所有条件在同1根K线内触发）
+
+ez_d_longCondition = d_longCondition1[1] and is_bearish[1] and d_longCondition2 and easy_second_cond
+ez_d_shortCondition = d_shortCondition1[1] and is_bullish[1] and d_shortCondition2 and easy_second_cond
+ez_k_longCondition = k_longCondition1[1] and is_bearish[1] and k_longCondition2 and easy_second_cond
+ez_k_shortCondition = k_shortCondition1[1] and is_bullish[1] and k_shortCondition2 and easy_second_cond
+
+
+// 正常条件
+n_d_longCondition = d_longCondition1 and  d_longCondition2
+n_d_shortCondition = d_shortCondition1 and d_shortCondition2
+n_k_longCondition = k_longCondition1  and  k_longCondition2
+n_k_shortCondition = k_shortCondition1 and k_shortCondition2
+
 
 // 多头趋势  做多
-d_longCondition  =  uptrend and d_longCondition1 and  d_longCondition2 and tradeDateIsAllowed
+d_longCondition  =  uptrend and (ez_d_longCondition or n_d_longCondition ) and tradeDateIsAllowed
 
 //多头趋势 做空
-d_shortCondition = uptrend and d_shortCondition1 and d_shortCondition2 and tradeDateIsAllowed
+d_shortCondition = uptrend and (ez_d_shortCondition or n_d_shortCondition )and tradeDateIsAllowed
 
 // 空头趋势  做多
-k_longCondition  =  downtrend and k_longCondition1  and  k_longCondition2 and tradeDateIsAllowed
+k_longCondition  =  downtrend and (ez_k_longCondition or n_k_longCondition) and tradeDateIsAllowed
 
 //空头趋势 做空
-k_shortCondition = downtrend and k_shortCondition1 and k_shortCondition2 and tradeDateIsAllowed
+k_shortCondition = downtrend and (ez_k_shortCondition and n_k_shortCondition) and tradeDateIsAllowed
 
 
 if tradeDateIsAllowed
