@@ -15,7 +15,7 @@ gold = #f1e100
 
 
 //@version=5
-strategy(title='机械蛙4.0', shorttitle='机械蛙4.0', overlay=false, pyramiding = 5)
+strategy(title='机械蛙4.0', shorttitle='机械蛙4.0', overlay=false, pyramiding = 5, initial_capital = 100000)
 
 
 // 需要 用到 的 指标 有以下:
@@ -871,6 +871,12 @@ stop_k_num = input.int(5, minval=1, title='止损时往前找前高和前低的�
 join_p = input.float(0.02, minval=0, title='每次进场 比例?', group="机械蛙")
 profit_p = input.float(0.4, minval=0, title='每次止盈 比例?', group="机械蛙")
 profit_count = input.int(5, minval=1, title='分批止盈次数', group="机械蛙")
+
+max_potion = input.float(0.2, minval=0, title='最大持仓比例 / 由于tv限制 需要手动设置单价和初始资金', group="机械蛙")
+initial_capital = input.float(100000, minval=0, title='初始资金', group="机械蛙")
+single_price = input.float(100, minval=0, title='手动设置单价', group="机械蛙")
+
+strategy.risk.max_position_size(initial_capital* max_potion / single_price)
 
 
 // 根据 止损 来算出1:1的止盈, 看是否 超过了 压力区, 如果超过了, 那么就不要开单
