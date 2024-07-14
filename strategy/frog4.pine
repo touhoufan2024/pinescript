@@ -870,6 +870,7 @@ stop_k_num = input.int(5, minval=1, title='止损时往前找前高和前低的�
 
 join_p = input.float(0.02, minval=0, title='每次进场 比例?', group="机械蛙")
 profit_p = input.float(0.4, minval=0, title='每次止盈 比例?', group="机械蛙")
+profit_count = input.int(5, minval=1, title='分批止盈次数', group="机械蛙")
 
 
 // 根据 止损 来算出1:1的止盈, 看是否 超过了 压力区, 如果超过了, 那么就不要开单
@@ -1110,16 +1111,34 @@ bgcolor(   shortCondition ? darkRed : na)
 
 var int long_num = 0
 
+var float qtyPercentSum = 0
+var float qtyPercent = 0
+
+
 if longCondition
     long_id = "Long" + str.tostring(long_num)
     long_num += 1
 
     my_qty = strategy.equity * join_p / close
-    strategy.entry(long_id, strategy.long, qty = my_qty)
 
-    strategy.exit(long_id + "止盈止损1", long_id, qty_percent = profit_p * 100, limit = close + long_stop, stop = close - long_stop)
-    strategy.exit(long_id + "止盈止损2", long_id, qty_percent = profit_p * ((1 - profit_p) * 100), limit = close + long_stop * 2, stop = close - long_stop)
-    strategy.exit(long_id + "止盈止损3", long_id, qty_percent = 100 - profit_p * 100 - profit_p * ((1 - profit_p) * 100), limit = close + long_stop * 3, stop = close - long_stop)
+    strategy.entry(long_id, strategy.long, qty = my_qty, comment = long_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty))
+
+    log.warning("***long_start****")
+    qtyPercentSum := 0
+    for i = 1 to profit_count
+        limit = close + long_stop * i
+        stop = close - long_stop
+        if i == profit_count  // 最后一组
+            qtyPercent := 100 - qtyPercentSum
+        else                  // 非最后一组
+            qtyPercent := (100 - qtyPercentSum) * profit_p
+            qtyPercentSum := (qtyPercentSum + qtyPercent)
+
+        exit_id = long_id + "-exit" + str.tostring(i) + "_" + str.tostring(close) + "_" + str.tostring(limit) + "_" + str.tostring(stop) + "_" + str.tostring(qtyPercent)
+        strategy.exit(exit_id, from_entry=long_id, qty_percent=qtyPercent, limit=limit, stop=stop)
+        log.warning("{0}  ", exit_id)
+
+    log.warning("***long_end****")
 
 
 var int short_num = 0
@@ -1129,8 +1148,22 @@ if shortCondition
     short_num += 1
 
     my_qty = strategy.equity * join_p / close
-    strategy.entry(short_id, strategy.short, qty = my_qty)
+    // strategy.entry(short_id, strategy.short, qty = my_qty)
+    strategy.entry(short_id, strategy.short, qty = my_qty, comment = short_id + "_" + str.tostring(close) + "_" + str.tostring(my_qty))
 
-    strategy.exit(short_id + "止盈止损1", short_id, qty_percent = profit_p * 100, limit = close - short_stop, stop = close + short_stop)
-    strategy.exit(short_id + "止盈止损2", short_id, qty_percent = profit_p * ((1 - profit_p) * 100), limit = close - short_stop * 2, stop = close + short_stop)
-    strategy.exit(short_id + "止盈止损3", short_id, qty_percent = 100 - profit_p * 100 - profit_p * ((1 - profit_p) * 100), limit = close - short_stop * 3, stop = close + short_stop)
+    log.error("***short_start****")
+    qtyPercentSum := 0
+    for i = 1 to profit_count
+        limit = close - short_stop * i
+        stop = close + short_stop
+        if i == profit_count  // 最后一组
+            qtyPercent := 100 - qtyPercentSum
+        else                  // 非最后一组
+            qtyPercent := (100 - qtyPercentSum) * profit_p
+            qtyPercentSum := (qtyPercentSum + qtyPercent)
+
+        exit_id = short_id + "-exit" + str.tostring(i) + "_" + str.tostring(close) + "_" + str.tostring(limit) + "_" + str.tostring(stop) + "_" + str.tostring(qtyPercent)
+        strategy.exit(exit_id, from_entry=short_id, qty_percent=qtyPercent, limit=limit, stop=stop)
+        log.error("{0}  ", exit_id)
+
+    log.error("***short_end****")
