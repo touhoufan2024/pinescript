@@ -15,7 +15,7 @@ gold = #f1e100
 
 
 //@version=5
-strategy(title='机械蛙4.0', shorttitle='机械蛙4.0', overlay=false, pyramiding = 5, initial_capital = 100000)
+strategy(title='机械蛙4.0', shorttitle='机械蛙4.0', overlay=false, pyramiding = 5)
 
 
 // 需要 用到 的 指标 有以下:
@@ -1093,6 +1093,8 @@ ez_d_shortCondition = d_shortCondition1[1] and is_bullish[1] and d_shortConditio
 ez_k_longCondition = k_longCondition1[1] and is_bearish[1] and k_longCondition2 and easy_second_cond
 ez_k_shortCondition = k_shortCondition1[1] and is_bullish[1] and k_shortCondition2 and easy_second_cond
 
+// log.info("{0} {1} {2} {3}", ez_d_longCondition, ez_d_shortCondition, ez_k_longCondition, ez_k_shortCondition)
+
 
 // 正常条件
 n_d_longCondition = d_longCondition1 and  d_longCondition2
@@ -1100,18 +1102,25 @@ n_d_shortCondition = d_shortCondition1 and d_shortCondition2
 n_k_longCondition = k_longCondition1  and  k_longCondition2
 n_k_shortCondition = k_shortCondition1 and k_shortCondition2
 
+// 总条件
+a_d_longCondition = n_d_longCondition or  ez_d_longCondition
+a_d_shortCondition = n_d_shortCondition or ez_d_shortCondition
+a_k_longCondition = n_k_longCondition  or  ez_k_longCondition
+a_k_shortCondition = n_k_shortCondition or ez_k_shortCondition
+
+
 
 // 多头趋势  做多
-d_longCondition  =  uptrend and (ez_d_longCondition or n_d_longCondition ) and tradeDateIsAllowed
+d_longCondition  =  uptrend and ( a_d_longCondition ) and tradeDateIsAllowed
 
 //多头趋势 做空
-d_shortCondition = uptrend and (ez_d_shortCondition or n_d_shortCondition )and tradeDateIsAllowed
+d_shortCondition = uptrend and (a_d_shortCondition ) and tradeDateIsAllowed
 
 // 空头趋势  做多
-k_longCondition  =  downtrend and (ez_k_longCondition or n_k_longCondition) and tradeDateIsAllowed
+k_longCondition  =  downtrend and (a_k_longCondition) and tradeDateIsAllowed
 
 //空头趋势 做空
-k_shortCondition = downtrend and (ez_k_shortCondition and n_k_shortCondition) and tradeDateIsAllowed
+k_shortCondition = downtrend and ( a_k_shortCondition) and tradeDateIsAllowed
 
 
 if tradeDateIsAllowed
