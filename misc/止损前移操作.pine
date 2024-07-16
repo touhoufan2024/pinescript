@@ -1,0 +1,216 @@
+//@version=5
+strategy("止损前移操作", overlay=true, pyramiding = 10)
+
+
+
+
+enableFilter = input(true,  "Enable Backtesting Range Filtering")
+fromDate     = input.time(timestamp("20 Jan 2023 00:00 +0300"), "Start Date")
+toDate       = input.time(timestamp("20 Jan 2025 00:00 +0300"), "End Date")
+
+tradeDateIsAllowed = not enableFilter or (time >= fromDate and time <= toDate)
+
+
+// 定义策略参数, 这些 可以 先不管
+takeProfit1 = 1.02  // 第一止盈目标，价格上升2%
+takeProfit2 = 1.04  // 第二止盈目标，价格上升4%
+takeProfit3 = 1.06  // 第三止盈目标，价格上升6%
+takeProfit4 = 1.08 
+takeProfit5 = 1.10
+
+
+
+stopLoss1 = 0.98    // 第一止损目标，价格下跌2%
+stopLoss2 = 0.96    // 第二止损目标，价格下跌4%
+stopLoss3 = 0.94    // 第三止损目标，价格下跌6%
+stopLoss4 = 0.92    // 第三止损目标，价格下跌6%
+stopLoss5 = 0.90    // 第三止损目标，价格下跌6%
+
+
+profit_count = 4  // 分批止盈次数
+// 每次 止盈 的 比例
+profit_p = 0.4
+
+
+// 固定版本的, 尽量不要这样做
+// 定义每批止盈和止损的比例
+// qtyPercent1 = profit_p * 100                                  // 第一批止盈 40
+// qtyPercent2 = profit_p * (100 - qtyPercent1)                  // 第二批止盈和止损比例 24
+// qtyPercent3 = profit_p * (100 - qtyPercent1 - qtyPercent2)    // 第三批止盈和止损比例 0.4 * 36 = 14.4
+// qtyPercent4 = 100 - qtyPercent1 - qtyPercent2 - qtyPercent3   // 第三批止盈和止损比例  21.6
+
+qtyPercent1  =  30
+qtyPercent2  =  25    
+qtyPercent3  =  20
+qtyPercent4  = 15
+qtyPercent5  = 10
+
+
+import marspumpkin/hashmaps/5
+// 定义哈希表
+hashmap = array.new_string(100000)
+
+
+var float qtyPercentSum = 0
+var float qtyPercent = 0
+
+
+var int long_count = 0  // long id 计数
+
+longCond = ta.crossover(close, ta.sma(close, 50)) and tradeDateIsAllowed
+
+bgcolor(   longCond ? color.new(color.green, 80) : na)
+
+long_id = "long" + str.tostring(long_count)
+// 开仓时 就弄好了.
+// 进场条件：收盘价向上穿过50周期均线时开多头头寸
+if longCond
+    long_count := long_count + 1
+
+    // if (strategy.position_size == 0)
+    //     log.error("{0}", str.tostring( long_id + "-exit1-" + str.tostring(close)))
+
+    // 开多头头寸
+    myqty = 100
+    strategy.entry(long_id, strategy.long, qty = myqty, comment = long_id + "_" + str.tostring(close) + "_" + str.tostring(myqty))
+
+
+    if strategy.opentrades.entry_bar_index(0) == (bar_index - 1)
+        log.error("entry success!!  id: {0}", long_id)
+
+    // if (strategy.opentrades  == ( strategy.opentrades[1] + 1))
+        // log.error("entry success!!  id: {0}", long_id)
+
+
+    // 开仓时, 要设置 止盈/止损位置
+    // 第一批止盈和止损
+    limit1 = close * takeProfit1
+    stop1 = close * stopLoss1
+    exit_id1 = long_id + "-exit1" // + str.tostring(close)  //+ "_" + str.tostring(limit1) + "_" + str.tostring(stop1)
+    strategy.exit(exit_id1, from_entry=long_id, qty_percent=qtyPercent1, limit=limit1, stop=stop1)
+
+    // 第二批止盈和止损
+    limit2 = close * takeProfit2
+    stop2 = close * stopLoss1
+    exit_id2 = long_id + "-exit2" // + str.tostring(close)  //+ "_" + str.tostring(limit2) + "_" + str.tostring(stop2)
+    strategy.exit(exit_id2, from_entry=long_id, qty_percent=qtyPercent2, limit=limit2, stop=stop2)
+
+    // 第三批止盈和止损
+    limit3 = close * takeProfit3
+    stop3 = close * stopLoss1
+    exit_id3 = long_id + "-exit3"  //+ str.tostring(close)  //+ "_" + str.tostring(limit3) + "_" + str.tostring(stop3)
+    strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=stop3)
+    
+    // 第四批止盈和止损
+    limit4 = close * takeProfit4
+    stop4 = close * stopLoss1
+    exit_id4 = long_id + "-exit4" //+ str.tostring(close)  //+ "_" + str.tostring(limit4) + "_" + str.tostring(stop4)
+    strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=stop4)
+
+    // 第五批止盈和止损
+    limit5 = close * takeProfit5
+    stop5 = close * stopLoss1
+    exit_id5 = long_id + "-exit5" //+ str.tostring(close)  //+ "_" + str.tostring(limit5) + "_" + str.tostring(stop5)
+    strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=stop5)
+
+
+
+// 查看是否 开仓成功, 查看仓位是否发生变化
+if strategy.opentrades == (strategy.opentrades[1] + 1)
+    log.error("entry success!!  id: {0}",  "long" + str.tostring(long_count - 1))
+
+
+
+
+// 实时更新, 如果 需要 移动止损, 从这里下手更改
+if (strategy.position_size > 0) and tradeDateIsAllowed and 1
+    log.info("***start**** size: {0} entry_name: {1} avg_price: {2}", str.tostring(strategy.position_size), strategy.position_entry_name, str.tostring(strategy.position_avg_price))
+    log.info("当前价格 {0}", str.tostring(close))
+    // 遍历 所有 打开的仓位
+    if strategy.opentrades > 0
+        for i = 0 to strategy.opentrades - 1
+            long_id = strategy.opentrades.entry_id(i)
+            long_entry_price = strategy.opentrades.entry_price(i)
+            long_qty = strategy.opentrades.size(i)
+            profit = strategy.opentrades.profit_percent(i)
+            max_down = strategy.opentrades.max_drawdown_percent(i)
+            log.info("未平仓仓位 {0}, 入仓成本价: {1} 目前持仓数量 {2} 目前利润 {3} 最大回撤 {4}", long_id, str.tostring(long_entry_price), str.tostring(long_qty), str.tostring(profit), str.tostring(max_down))
+
+            limit1 = long_entry_price * takeProfit1
+            stop1 = long_entry_price * stopLoss1
+            exit_id1 = long_id + "-exit1"
+
+            // 第二批止盈和止损
+            limit2 = long_entry_price * takeProfit2
+            stop2 = long_entry_price * stopLoss1
+            exit_id2 = long_id + "-exit2"
+
+            // 第三批止盈和止损
+            limit3 = long_entry_price * takeProfit3
+            stop3 = long_entry_price * stopLoss1
+            exit_id3 = long_id + "-exit3"
+
+            // 第四批止盈和止损
+            limit4 = long_entry_price * takeProfit4
+            stop4 = long_entry_price * stopLoss1
+            exit_id4 = long_id + "-exit4"
+
+            // 第五批止盈和止损
+            limit5 = long_entry_price * takeProfit5
+            stop5 = long_entry_price * stopLoss1
+            exit_id5 = long_id + "-exit5"
+
+
+            // 如果 第一批 止盈, 那么剩余部分全部更新止损为 成本价
+            if (close  >=  limit1)
+                strategy.exit(exit_id2, from_entry=long_id, qty_percent=qtyPercent2, limit=limit2, stop=long_entry_price)
+                strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=long_entry_price)
+                strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=long_entry_price)
+                strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=long_entry_price)
+                // log.error("close > limit1  {0}", str.tostring(long_entry_price))
+
+            // 如果 第二批 止盈, 那么 3, 4, 5剩余部分 更新 止损 为  1倍 止盈 价
+            if (close >=  limit2)
+                strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=limit1)
+                strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=limit1)
+                strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit1)
+
+
+
+            // 第一批止盈和止损
+            // limit1 = long_entry_price * takeProfit1
+            // stop1 = long_entry_price * stopLoss1
+            // exit_id1 = long_id + "-exit1-" + str.tostring(long_entry_price)  //+ "_" + str.tostring(limit1) + "_" + str.tostring(stop1)
+            // strategy.exit(exit_id1, from_entry=long_id, qty_percent=qtyPercent1, limit=limit1, stop=stop1)
+            // log.warning("{0}", str.tostring(exit_id1))
+            // // 第二批止盈和止损
+            // limit2 = long_entry_price * takeProfit2
+            // stop2 = long_entry_price * stopLoss1
+            // exit_id2 = long_id + "-exit2-" + str.tostring(long_entry_price)  //+ "_" + str.tostring(limit2) + "_" + str.tostring(stop2)
+            // strategy.exit(exit_id2, from_entry=long_id, qty_percent=qtyPercent2, limit=limit2, stop=stop2)
+
+            // // 第三批止盈和止损
+            // limit3 = long_entry_price * takeProfit3
+            // stop3 = long_entry_price * stopLoss1
+            // exit_id3 = long_id + "-exit3-" + str.tostring(long_entry_price)  //+ "_" + str.tostring(limit3) + "_" + str.tostring(stop3)
+            // strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=stop3)
+
+            // // 第四批止盈和止损
+            // limit4 = long_entry_price * takeProfit4
+            // stop4 = long_entry_price * stopLoss1
+            // exit_id4 = long_id + "-exit4-" + str.tostring(long_entry_price)  //+ "_" + str.tostring(limit4) + "_" + str.tostring(stop4)
+            // strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=stop4)
+
+            // // 第五批止盈和止损
+            // limit5 = long_entry_price * takeProfit5
+            // stop5 = long_entry_price * stopLoss1
+            // exit_id5 = long_id + "-exit5-" + str.tostring(long_entry_price)  //+ "_" + str.tostring(limit5) + "_" + str.tostring(stop5)
+            // strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=stop5)
+
+    // 遍历所有 关闭的 仓位
+    // if strategy.closedtrades > 0
+    //     for i = 0 to strategy.closedtrades - 1
+    //         log.info("已平仓仓位 {0}, 入仓成本价: {1} ", str.tostring(strategy.closedtrades.entry_id(i)), str.tostring(strategy.closedtrades.entry_price(i)))
+
+    log.info("********** end ***********")
+
