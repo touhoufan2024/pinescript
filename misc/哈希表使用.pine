@@ -1,0 +1,37 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ashchippy
+
+
+import marspumpkin/hashmaps/5
+
+//@version=5
+indicator("哈希表使用")
+
+
+hashmap = array.new_string(100000)
+
+key = 'long0-exit1'
+// 放入 100
+hashmaps.put(hashmap, key, 100)
+
+before = hashmaps.get(hashmap, key)
+// hashmaps.remove(hashmap, key)
+
+// 修改为 200
+hashmaps.put(hashmap, key, 200)
+
+after = hashmaps.get(hashmap, key)
+after := after == na ? 'NaN' : after
+
+
+
+value = hashmaps.get(hashmap, 'long0-exit2')
+value := value == na ? 'NaN' : value
+
+
+
+
+label.new(x=bar_index, y=high, textcolor=color.black, text='before removing: ' + before + ', after removing: ' + after + value , size=size.normal, style=label.style_none)
+
+
+plot(close)
