@@ -48,7 +48,7 @@ qtyPercent5  = 10
 
 import marspumpkin/hashmaps/5
 // 定义哈希表
-hashmap = array.new_string(10000)
+var hashmap = array.new_string(10000)
 
 
 var float qtyPercentSum = 0
@@ -204,31 +204,31 @@ if (strategy.position_size > 0) and tradeDateIsAllowed and 1
 
 
             // 如果 第一批 止盈, 那么剩余部分全部更新止损为 成本价, 这行只能执行一次, 所以 就是
-            if (close  >=  limit1) //and (hashmaps.get(hashmap, exit_id1) != na)
+            if (close  >=  limit1) and not na(hashmaps.get(hashmap, exit_id1))
                 log.warning("exit_id1 {0}  {1}", exit_id1, hashmaps.get(hashmap, exit_id1))
                 strategy.exit(exit_id2, from_entry=long_id, qty_percent=qtyPercent2, limit=limit2, stop=long_entry_price)
                 strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=long_entry_price)
                 strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=long_entry_price)
                 strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=long_entry_price)
-                // hashmaps.remove(hashmap, exit_id1)
+                hashmaps.remove(hashmap, exit_id1)
 
             // 如果 第二批 止盈, 那么 3, 4, 5剩余部分 更新 止损 为  1倍 止盈 价
-            // if (close >=  limit2) //and not na(hashmaps.get(hashmap, exit_id2))
-            //     strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=limit1)
-            //     strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=limit1)
-            //     strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit1)
-                // hashmaps.remove(hashmap, exit_id2)
+            if (close >=  limit2) and not na(hashmaps.get(hashmap, exit_id2))
+                strategy.exit(exit_id3, from_entry=long_id, qty_percent=qtyPercent3, limit=limit3, stop=limit1)
+                strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=limit1)
+                strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit1)
+                hashmaps.remove(hashmap, exit_id2)
 
-            // // 如果 第三批 止盈, 那么 4, 5剩余部分 更新 止损 为  2倍 止盈 价
-            // if (close >=  limit3) and not na(hashmaps.get(hashmap, exit_id3))
-            //     strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=limit2)
-            //     strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit2)
-            //     hashmaps.remove(hashmap, exit_id3)
+            // 如果 第三批 止盈, 那么 4, 5剩余部分 更新 止损 为  2倍 止盈 价
+            if (close >=  limit3) and not na(hashmaps.get(hashmap, exit_id3))
+                strategy.exit(exit_id4, from_entry=long_id, qty_percent=qtyPercent4, limit=limit4, stop=limit2)
+                strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit2)
+                hashmaps.remove(hashmap, exit_id3)
 
-            // // 如果 第四批止盈, 那么 5 要更新止损 为 3倍止盈价, 之后不用再管了
-            // if (close >=  limit4) and not na(hashmaps.get(hashmap, exit_id4))
-            //     strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit3)
-            //     hashmaps.remove(hashmap, exit_id4)
+            // 如果 第四批止盈, 那么 5 要更新止损 为 3倍止盈价, 之后不用再管了
+            if (close >=  limit4) and not na(hashmaps.get(hashmap, exit_id4))
+                strategy.exit(exit_id5, from_entry=long_id, qty_percent=qtyPercent5, limit=limit5, stop=limit3)
+                hashmaps.remove(hashmap, exit_id4)
 
 
 
