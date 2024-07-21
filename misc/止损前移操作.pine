@@ -1,5 +1,5 @@
 //@version=5
-strategy("止损前移操作", overlay=true, pyramiding = 1)
+strategy("止损前移操作", overlay=true, pyramiding = 10)
 
 
 enableFilter = input(false,  "Enable Backtesting Range Filtering")
@@ -76,9 +76,9 @@ if (strategy.opentrades == (strategy.opentrades[1] + 1))
     for i = 1 to profit_count
         mylimit = close[1] * (1 + 0.02 * i)
         mystop = close[1] * 0.98
-        exit_id = strategy.position_entry_name + "-exit" + str.tostring(i)
+        exit_id = long_id + "-exit" + str.tostring(i)
         my_perfit = array.get(profit_vector, i)
-        strategy.exit(exit_id, from_entry=strategy.position_entry_name, qty_percent=my_perfit, limit=mylimit, stop=mystop)
+        strategy.exit(exit_id, from_entry=long_id, qty_percent=my_perfit, limit=mylimit, stop=mystop)
         log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close[1])
         hashmaps.put(hashmap, exit_id, '0')
 
@@ -92,9 +92,9 @@ if (strategy.position_size > 0) and tradeDateIsAllowed and 1
     // 遍历 所有 打开的仓位
 
     // log.warning("start print hashmap")
-    for j = 0 to 10000 - 1
-        if not na(array.get(hashmap, j))
-            log.warning("**print array {0}", array.get(hashmap, j))
+    // for j = 0 to 10000 - 1
+    //     if not na(array.get(hashmap, j))
+    //         log.warning("**print array {0}", array.get(hashmap, j))
 
     // log.warning("end print hashmap")
 
@@ -120,6 +120,9 @@ if (strategy.position_size > 0) and tradeDateIsAllowed and 1
                             k_exit_id = strategy.position_entry_name + "-exit" + str.tostring(k)
                             k_limit = long_entry_price * (1 + 0.02 * k)
                             kk_limit = long_entry_price * (1 + 0.02 * j)
+                            // if k == profit_count
+                            //     strategy.exit(k_exit_id, from_entry=long_id, qty_percent=array.get(profit_vector, k) * 1.1, limit=k_limit, stop=kk_limit)
+                            // else
                             strategy.exit(k_exit_id, from_entry=long_id, qty_percent=array.get(profit_vector, k), limit=k_limit, stop=kk_limit)
                             log.error("重新设定 {0}  percent {1} limit {2}  stop {3}", k_exit_id, array.get(profit_vector, k), k_limit, kk_limit)
                     hashmaps.remove(hashmap, exit_id)
