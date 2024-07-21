@@ -1177,34 +1177,45 @@ if longCondition
     long_id := "long" + str.tostring(long_count)
 
     myqty = strategy.equity * join_p / close
-    // 只开仓, 其他的啥也不干
+
     strategy.entry(long_id, strategy.long, qty = myqty, comment = long_id + "_" + str.tostring(close) + "_" + str.tostring(myqty))
+
+    for i = 1 to profit_count
+        mylimit = close  + long_stop * i
+        mystop = close - long_stop
+        exit_id = long_id + "-exit" + str.tostring(i)
+        my_perfit = array.get(profit_vector, i)
+        strategy.exit(exit_id, from_entry=long_id, qty_percent=my_perfit, limit=mylimit, stop=mystop)
+        log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close)
+        hashmaps.put(hashmap, exit_id, '0')
+    hashmaps.put(hashmap, long_id + "-exit", long_stop)
+    log.warning("添加 long_stop {0} {1}", long_id + "-exit", str.tostring(long_stop))
 
 
 // 查看是否 开仓成功, 查看仓位是否发生变化, 在这里 给每个 仓位 都设置 好 默认的 止盈 和 止损, 
 // 注意 这里 要用上一条k 线的数据!!!
 // 添加 key, 还要记录 当时的 long_stop的值
-if (strategy.opentrades == (strategy.opentrades[1] + 1))
-    // 入场价 应该是 开盘价, 也就是 上一条的 收盘价, 使用 close[1]
-    // 自动循环设置exit 并设置哈希表
-    // qtyPercentSum := 0
-    for i = 1 to profit_count
-        mylimit = close[1]  + long_stop[1] * i
-        mystop = close[1] - long_stop[1]
-        exit_id = strategy.position_entry_name + "-exit" + str.tostring(i)
-        my_perfit = array.get(profit_vector, i)
-        strategy.exit(exit_id, from_entry=strategy.position_entry_name, qty_percent=my_perfit, limit=mylimit, stop=mystop)
-        log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close[1])
-        hashmaps.put(hashmap, exit_id, '0')
-    hashmaps.put(hashmap, strategy.position_entry_name + "-exit", long_stop[1])
-    log.warning("添加 long_stop {0} {1}", strategy.position_entry_name + "-exit", str.tostring(long_stop[1]))
+// if (strategy.opentrades == (strategy.opentrades[1] + 1)) and (strategy.position_size > 0)
+//     // 入场价 应该是 开盘价, 也就是 上一条的 收盘价, 使用 close[1]
+//     // 自动循环设置exit 并设置哈希表
+//     // qtyPercentSum := 0
+//     for i = 1 to profit_count
+//         mylimit = close[1]  + long_stop[1] * i
+//         mystop = close[1] - long_stop[1]
+//         exit_id = long_id + "-exit" + str.tostring(i)
+//         my_perfit = array.get(profit_vector, i)
+//         strategy.exit(exit_id, from_entry=long_id, qty_percent=my_perfit, limit=mylimit, stop=mystop)
+//         log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close[1])
+//         hashmaps.put(hashmap, exit_id, '0')
+//     hashmaps.put(hashmap, long_id + "-exit", long_stop[1])
+//     log.warning("添加 long_stop {0} {1}", long_id + "-exit", str.tostring(long_stop[1]))
 
 
 // 移动止损
 // 实时更新, 如果 需要 移动止损, 从这里下手更改
 // 根据止损位置算出止盈位置
 if (strategy.position_size > 0) and tradeDateIsAllowed and 1
-    // log.info("***start**** size: {0} entry_name: {1} avg_price: {2}", str.tostring(strategy.position_size), strategy.position_entry_name, str.tostring(strategy.position_avg_price))
+    // log.info("***start**** size: {0} entry_name: {1} avg_price: {2}", str.tostring(strategy.position_size), short_id, str.tostring(strategy.position_avg_price))
     // log.info("当前价格 {0}", str.tostring(close))
 
     // 这里打印一下 哈希表 遍历 所有 打开的仓位
@@ -1217,31 +1228,31 @@ if (strategy.position_size > 0) and tradeDateIsAllowed and 1
 
     if strategy.opentrades > 0
         for i = 0 to strategy.opentrades - 1
-            long_id = strategy.opentrades.entry_id(i)
+            i_long_id = strategy.opentrades.entry_id(i)
             long_entry_price = strategy.opentrades.entry_price(i)
             long_qty = strategy.opentrades.size(i)
             profit = strategy.opentrades.profit_percent(i)
             max_down = strategy.opentrades.max_drawdown_percent(i)
 
             // 拿到 这个仓位的 long_stop
-            i_long_stop = hashmaps.get_float(hashmap, strategy.position_entry_name + "-exit")
-            // log.warning("拿到 long_stop {0} {1}", strategy.position_entry_name + "-exit", i_long_stop)
+            i_long_stop = hashmaps.get_float(hashmap, i_long_id + "-exit")
+            log.warning("拿到 long_stop {0} {1}", i_long_id + "-exit", i_long_stop)
 
             // 改为自动版的, 需要自动循环5次, 分别遍历 了 exit1, 2, 3, 4, 5
             for j = 1 to profit_count
                 j_limit = long_entry_price + i_long_stop * j
                 stop = long_entry_price  - i_long_stop
-                exit_id = strategy.position_entry_name + "-exit" + str.tostring(j)
+                exit_id = i_long_id + "-exit" + str.tostring(j)
                 if (close >=  j_limit) and not na(hashmaps.get(hashmap, exit_id))
                     log.error("遍历 {0}  close {1} >=  j_limit {2}", exit_id, close, j_limit)
                     //如果 exit1 被执行, 那么要遍历 2 3 4 5
                     for k = (j + 1) to profit_count
                         if k <= profit_count
-                            k_exit_id = strategy.position_entry_name + "-exit" + str.tostring(k)
+                            k_exit_id = i_long_id + "-exit" + str.tostring(k)
                             k_limit = long_entry_price  + i_long_stop * k
                             kk_limit = long_entry_price  +  i_long_stop * j
                             // 止盈 不变 , 止损 前移
-                            strategy.exit(k_exit_id, from_entry=long_id, qty_percent=array.get(profit_vector, k), limit=k_limit, stop=kk_limit)
+                            strategy.exit(k_exit_id, from_entry=i_long_id, qty_percent=array.get(profit_vector, k), limit=k_limit, stop=kk_limit)
                             log.error("重新设定 {0}  percent {1} limit {2}  stop {3}", k_exit_id, array.get(profit_vector, k), k_limit, kk_limit)
                     hashmaps.remove(hashmap, exit_id)
                     log.error("移除哈希表 {0}", exit_id)
@@ -1252,44 +1263,60 @@ if (strategy.position_size > 0) and tradeDateIsAllowed and 1
 
 
 
+
+// 开空
 // 一些计数器
 var int short_count = 0  // short id 计数
 var short_id = ""
 
 
 if shortCondition
-    short_id = "short" + str.tostring(short_count)
-    short_count += 1
+    // short_id := "short" + str.tostring(short_count)
+    // short_count += 1
+
+    short_count := short_count + 1
+    short_id := "short" + str.tostring(short_count)
 
     myqty = strategy.equity * join_p / close
     // 只开仓, 其他的啥也不干
     strategy.entry(short_id, strategy.short, qty = myqty, comment = short_id + "_" + str.tostring(close) + "_" + str.tostring(myqty))
 
+    for i = 1 to profit_count
+        mylimit = close  - short_stop * i
+        mystop = close + short_stop
+        exit_id = short_id + "-exit" + str.tostring(i)
+        my_perfit = array.get(profit_vector, i)
+        strategy.exit(exit_id, from_entry=short_id, qty_percent=my_perfit, limit=mylimit, stop=mystop)
+        log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close)
+        hashmaps.put(hashmap, exit_id, '0')
+    hashmaps.put(hashmap, short_id + "-exit", short_stop)
+    log.warning("添加 short_stop {0} {1}", short_id + "-exit", str.tostring(short_stop))
+
 
 // 查看是否 开仓成功, 查看仓位是否发生变化, 在这里 给每个 仓位 都设置 好 默认的 止盈 和 止损, 
 // 注意 这里 要用上一条k 线的数据!!!
 // 添加 key, 还要记录 当时的 short_stop的值
-if (strategy.opentrades == (strategy.opentrades[1] + 1))
-    // 入场价 应该是 开盘价, 也就是 上一条的 收盘价, 使用 close[1]
-    // 自动循环设置exit 并设置哈希表
-    // qtyPercentSum := 0
-    for i = 1 to profit_count
-        mylimit = close[1]  - short_stop[1] * i
-        mystop = close[1] + short_stop[1]
-        exit_id = strategy.position_entry_name + "-exit" + str.tostring(i)
-        my_perfit = array.get(profit_vector, i)
-        strategy.exit(exit_id, from_entry=strategy.position_entry_name, qty_percent=my_perfit, limit=mylimit, stop=mystop)
-        log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close[1])
-        hashmaps.put(hashmap, exit_id, '0')
-    hashmaps.put(hashmap, strategy.position_entry_name + "-exit", short_stop[1])
-    log.warning("添加 short_stop {0} {1}", strategy.position_entry_name + "-exit", str.tostring(short_stop[1]))
+// if (strategy.opentrades == (strategy.opentrades[1] + 1)) and (strategy.position_size < 0)
+//     // 入场价 应该是 开盘价, 也就是 上一条的 收盘价, 使用 close[1]
+//     // 自动循环设置exit 并设置哈希表
+//     // qtyPercentSum := 0
+//     for i = 1 to profit_count
+//         mylimit = close[1]  - short_stop[1] * i
+//         mystop = close[1] + short_stop[1]
+//         exit_id = short_id + "-exit" + str.tostring(i)
+//         my_perfit = array.get(profit_vector, i)
+//         strategy.exit(exit_id, from_entry=short_id, qty_percent=my_perfit, limit=mylimit, stop=mystop)
+//         log.error("添加哈希表 {0}  percent {1}  limit {2}  stop {3}  entry{4}", exit_id, my_perfit, mylimit, mystop, close[1])
+//         hashmaps.put(hashmap, exit_id, '0')
+//     hashmaps.put(hashmap, short_id + "-exit", short_stop[1])
+//     log.warning("添加 short_stop {0} {1}", short_id + "-exit", str.tostring(short_stop[1]))
 
 
 // 移动止损
 // 实时更新, 如果 需要 移动止损, 从这里下手更改
 // 根据止损位置算出止盈位置
 if (strategy.position_size < 0) and tradeDateIsAllowed and 1
-    // log.info("***start**** size: {0} entry_name: {1} avg_price: {2}", str.tostring(strategy.position_size), strategy.position_entry_name, str.tostring(strategy.position_avg_price))
+    // log.info("***start**** size: {0} entry_name: {1} avg_price: {2}", str.tostring(strategy.position_size), short_id, str.tostring(strategy.position_avg_price))
     // log.info("当前价格 {0}", str.tostring(close))
 
     // 这里打印一下 哈希表 遍历 所有 打开的仓位
@@ -1302,31 +1329,31 @@ if (strategy.position_size < 0) and tradeDateIsAllowed and 1
 
     if strategy.opentrades > 0
         for i = 0 to strategy.opentrades - 1
-            short_id = strategy.opentrades.entry_id(i)
+            i_short_id = strategy.opentrades.entry_id(i)
             short_entry_price = strategy.opentrades.entry_price(i)
             short_qty = strategy.opentrades.size(i)
             profit = strategy.opentrades.profit_percent(i)
             max_down = strategy.opentrades.max_drawdown_percent(i)
 
             // 拿到 这个仓位的 short_stop
-            i_short_stop = hashmaps.get_float(hashmap, strategy.position_entry_name + "-exit")
-            // log.warning("拿到 short_stop {0} {1}", strategy.position_entry_name + "-exit", i_short_stop)
+            i_short_stop = hashmaps.get_float(hashmap, i_short_id + "-exit")
+            // log.warning("拿到 short_stop {0} {1}", i_short_id + "-exit", i_short_stop)
 
             // 改为自动版的, 需要自动循环5次, 分别遍历 了 exit1, 2, 3, 4, 5
             for j = 1 to profit_count
                 j_limit = short_entry_price - i_short_stop * j
                 stop = short_entry_price  - i_short_stop
-                exit_id = strategy.position_entry_name + "-exit" + str.tostring(j)
+                exit_id = i_short_id + "-exit" + str.tostring(j)
                 if (close <=  j_limit) and not na(hashmaps.get(hashmap, exit_id))
                     log.error("遍历 {0}  close {1} <=  j_limit {2}", exit_id, close, j_limit)
                     //如果 exit1 被执行, 那么要遍历 2 3 4 5
                     for k = (j + 1) to profit_count
                         if k <= profit_count
-                            k_exit_id = strategy.position_entry_name + "-exit" + str.tostring(k)
+                            k_exit_id = i_short_id + "-exit" + str.tostring(k)
                             k_limit = short_entry_price  - i_short_stop * k
                             kk_limit = short_entry_price  -  i_short_stop * j
                             // 止盈 不变 , 止损 前移
-                            strategy.exit(k_exit_id, from_entry=short_id, qty_percent=array.get(profit_vector, k), limit=k_limit, stop=kk_limit)
+                            strategy.exit(k_exit_id, from_entry=i_short_id, qty_percent=array.get(profit_vector, k), limit=k_limit, stop=kk_limit)
                             log.error("重新设定 {0}  percent {1} limit {2}  stop {3}", k_exit_id, array.get(profit_vector, k), k_limit, kk_limit)
                     hashmaps.remove(hashmap, exit_id)
                     log.error("移除哈希表 {0}", exit_id)
