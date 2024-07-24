@@ -473,7 +473,7 @@ bgcolor(mycolor)
 
 atr_length = input.int(title='Length', defval=13, minval=1)
 smoothing = input.string(title='Smoothing', defval='RMA', options=['RMA', 'SMA', 'EMA', 'WMA'])
-m = input(1, 'Multiplier')
+m = input.float(1.1, 'Multiplier')
 src1 = input(high)
 src2 = input(low)
 pline = input(true, 'Show Price Lines')
