@@ -1,0 +1,6 @@
+//@version=5
+indicator("Bar Index Logger", overlay=true)
+
+// 在每一根K线上打印bar_index
+if bar_index % 10 == 0  // 每隔10根K线打印一次，以防止图表过于混乱
+    label.new(bar_index, close, text=str.tostring(bar_index), style=label.style_label_down, color=color.white, textcolor=color.black)
