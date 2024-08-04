@@ -1,0 +1,4 @@
+inputTradingMode = input.string(defval='Long', options=['Long', 'Short', 'BiDir'], title='Trading Mode')
+
+//The purpose of this rule is to forbid short entries, only long etries will be placed. The rule affects the following function: 'entry'.
+strategy.risk.allow_entry_in(inputTradingMode == 'Long' ? strategy.direction.long : inputTradingMode == 'Short' ? strategy.direction.short : strategy.direction.all)
