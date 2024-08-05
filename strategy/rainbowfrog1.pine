@@ -1,0 +1,264 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ashchippy
+
+//@version=5
+strategy("彩虹蛙1.0", overlay=true, margin_long=100, margin_short=100)
+
+// 需要用到 彩虹图指标 和 ATR 指标
+
+// 彩虹图
+mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'], group = "彩虹图")
+smoothing = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'], group = "彩虹图")
+length = input.int(200, minval=1, title='Length', group = "彩虹图")
+x1 = input.float(5, '大Factor', minval=0.001, maxval=9, group = "彩虹图")
+x2 = input.float(3.65, '小Factor', minval=0.001, maxval=9, group = "彩虹图")
+
+
+HTFp = timeframe.period == '1' ? 60 : timeframe.period == '3' ? 20 : timeframe.period == '5' ? 48 : timeframe.period == '15' ? 96 : timeframe.period == '30' ? 48 : timeframe.period == '45' ? 32 : timeframe.period == '60' ? 24 : timeframe.period == '120' ? 84 : timeframe.period == '180' ? 56 : timeframe.period == '240' ? 42 : timeframe.period == 'D' ? 30 : timeframe.period == 'W' ? 52 : 12
+
+len = mode == 'Auto' ? HTFp : length
+
+ma_function(source, length) =>
+    if smoothing == 'SMA'
+        ta.sma(source, len)
+    else
+        if smoothing == 'EMA'
+            ta.ema(source, len)
+        else
+            if smoothing == 'RMA'
+                ta.rma(source, len)
+            else
+                if smoothing == 'WMA'
+                    ta.wma(source, len)
+                else
+                    if smoothing == 'VWMA'
+                        ta.vwma(source, len)
+                    else
+                        ta.hma(source, len)
+
+// 拿到 高点和低点
+serie1 = close > open ? close : close < open ? open : high
+// 如果是绿线,  就拿到 close,  如果是红线,  就拿到 open,  如果 open == close, 就拿到 高点, 总之, 拿到高点
+serie2 = close < open ? close : close > open ? open : low
+// 拿到低点
+
+// x表示 1.618 黄金比例 系数
+
+big_bottom = ma_function(serie1, len) - x1 * ma_function(ta.tr(true), len)
+big_top = ma_function(serie2, len) + x1 * ma_function(ta.tr(true), len)
+
+big_bottom1 = big_bottom - x1 * ma_function(ta.tr(true), len)
+big_top1 = big_top + x1 * ma_function(ta.tr(true), len)
+
+
+small_bottom = ma_function(serie1, len) - x2 * ma_function(ta.tr(true), len)
+small_top = ma_function(serie2, len) + x2 * ma_function(ta.tr(true), len)
+
+small_bottom1 = small_bottom - x2 * ma_function(ta.tr(true), len)
+small_top1 = small_top + x2 * ma_function(ta.tr(true), len)
+
+// 中线, 某个 平均值 的 ma
+basis = ma_function(hlc3, len)
+
+
+plot(big_top1, '大top1', color = color.blue)       // 1
+plot(big_top, '大top0', color= color.red)          // 3
+plot(big_bottom, '大bottom0', color= color.green)  // 8
+plot(big_bottom1, '大bottom1', color.aqua)         //9
+plot(basis, 'Middle Line', color=color.yellow)    // 5
+plot(small_top1, '小top1', color = color.purple)  // 2
+plot(small_top, '小top0', color=color.navy)       // 4
+plot(small_bottom, '小bottom0', color=color.lime)   // 6
+plot(small_bottom1, '小bottom1', color = color.teal)  // 7
+
+
+// 将 series float 数据存储在数组中
+float[] seriesArray = array.new_float()
+array.push(seriesArray, big_top1)
+array.push(seriesArray, big_top)
+array.push(seriesArray, big_bottom)
+array.push(seriesArray, big_bottom1)
+array.push(seriesArray, basis)
+array.push(seriesArray, small_top1)
+array.push(seriesArray, small_top)
+array.push(seriesArray, small_bottom)
+array.push(seriesArray, small_bottom1)
+
+array.sort(seriesArray, order.descending)
+
+
+
+import paragjyoti2012/LoggerLib/5
+
+var logger=LoggerLib.init()
+var logTable=LoggerLib.initTable(logger,20,0,"top-right","small",false)
+
+// 打印, 暂时 省略
+// log.error("*************srtart**************")
+// for i = 0 to 8
+//     log.info("{0}:  {1}", i, str.tostring(array.get(seriesArray, i)))
+// log.error("*************end*************")
+
+for i = 0 to 8
+    if barstate.islastconfirmedhistory
+        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_upper_right, color = color.white)
+
+
+// ATR 指标
+atr_length = input.int(title='Length', defval=13, minval=1, group = "ATR")
+atr_smoothing = input.string(title='Smoothing', defval='RMA', options=['RMA', 'SMA', 'EMA', 'WMA'], group = "ATR")
+m = input.float(1.1, 'Multiplier', group = "ATR")
+src1 = input(high, group = "ATR")
+src2 = input(low, group = "ATR")
+pline = input(true, 'Show Price Lines', group = "ATR")
+col1 = input(color.blue, 'ATR Text Color', group = "ATR")
+col2 = input.color(color.teal, 'Low Text Color', inline='1', group = "ATR")
+col3 = input.color(color.red, 'High Text Color', inline='2', group = "ATR")
+
+collong = input.color(color.teal, 'Low Line Color', inline='1', group = "ATR")
+colshort = input.color(color.red, 'High Line Color', inline='2', group = "ATR")
+
+atr_ma_function(source, atr_length) =>
+    if atr_smoothing == 'RMA'
+        ta.rma(source, atr_length)
+    else
+        if atr_smoothing == 'SMA'
+            ta.sma(source, atr_length)
+        else
+            if atr_smoothing == 'EMA'
+                ta.ema(source, atr_length)
+            else
+                ta.wma(source, atr_length)
+
+a = atr_ma_function(ta.tr(true), atr_length) * m
+atr_x = atr_ma_function(ta.tr(true), atr_length) * m + src1
+atr_x2 = src2 - atr_ma_function(ta.tr(true), atr_length) * m
+
+p1 = plot(atr_x, title='ATR Short Stop Loss', color=colshort, trackprice=pline ? true : false, transp=20)
+p2 = plot(atr_x2, title='ATR Long Stop Loss', color=collong, trackprice=pline ? true : false, transp=20)
+
+var table Table = table.new(position.bottom_center, 3, 1, border_width=3)
+
+f_fillCell(_table, _column, _row, _value, _timeframe) =>
+
+    _cellText = _timeframe + str.tostring(_value, '#.#')
+    table.cell(_table, _column, _row, _cellText, text_color=col1)
+    table.cell_set_text_color(Table, 1, 0, color.new(col3, transp=0))
+    table.cell_set_text_color(Table, 2, 0, color.new(col2, transp=0))
+
+if barstate.islast
+    f_fillCell(Table, 0, 0, a, 'ATR: ')
+    f_fillCell(Table, 1, 0, atr_x, 'H: ')
+    f_fillCell(Table, 2, 0, atr_x2, 'L: ')
+
+
+// 彩虹蛙参数
+
+// 多单:当k线触碰第6789根彩虹线时，立刻进场（设置4个开关，可控制6，7，8，9是否可进场）
+// 空单:当k线触碰第1234根彩虹线时，立刻进场（设置4个开关，可控制1，2，3，4是否可进场）与多单分开共8个开关
+
+l_6 = input.bool(false, "当k线下穿第6, 开多单", group = "彩虹蛙")
+l_7 = input.bool(false, "当k线下穿第7, 开多单", group = "彩虹蛙")
+l_8 = input.bool(false, "当k线下穿第8, 开多单", group = "彩虹蛙")
+l_9 = input.bool(false, "当k线下穿第9, 开多单", group = "彩虹蛙")
+
+tmp = input.string("", title="---------------- 分割线 -------------------", group = "彩虹蛙")
+
+s_1 = input.bool(false, "当k线上穿第1, 开空单", group = "彩虹蛙")
+s_2 = input.bool(false, "当k线上穿第2, 开空单", group = "彩虹蛙")
+s_3 = input.bool(false, "当k线上穿第3, 开空单", group = "彩虹蛙")
+s_4 = input.bool(false, "当k线上穿第4, 开空单", group = "彩虹蛙")
+
+
+
+// close 下穿 6
+close_through_6 = ta.crossunder(close, array.get(seriesArray, 5))
+bgcolor(   close_through_6  ? color.new(color.lime, 80) : na)
+
+// close 下穿 7
+close_through_7 = ta.crossunder(close, array.get(seriesArray, 6))
+bgcolor(   close_through_7  ? color.new(color.teal, 80) : na)
+
+
+// close 下穿 8
+close_through_8 = ta.crossunder(close, array.get(seriesArray, 7))
+bgcolor(   close_through_8  ? color.new(color.green, 80) : na)
+
+
+// close 下穿 9
+close_through_9 = ta.crossunder(close, array.get(seriesArray, 8))
+bgcolor(   close_through_9  ? color.new(color.aqua, 80) : na)
+
+
+// close 穿过 中线5 号线
+close_through_5 = ta.crossover(close, array.get(seriesArray, 4)) or ta.crossunder(close, array.get(seriesArray, 4))
+bgcolor(   close_through_5  ? color.new(color.yellow, 80) : na)
+
+
+// close 上穿 1
+close_through_1 = ta.crossover(close, array.get(seriesArray, 0))
+bgcolor(   close_through_1  ? color.new(color.blue, 80) : na)
+
+// close 上穿 2
+close_through_2 = ta.crossover(close, array.get(seriesArray, 1))
+bgcolor(   close_through_2  ? color.new(color.purple, 80) : na)
+
+// close 上穿 3
+close_through_3 = ta.crossover(close, array.get(seriesArray, 2))
+bgcolor(   close_through_3  ? color.new(color.red, 80) : na)
+
+// close 上穿 4
+close_through_4 = ta.crossover(close, array.get(seriesArray, 3))
+bgcolor(   close_through_4  ? color.new(color.navy, 80) : na)
+
+
+// 持有更外侧的单子时，更内侧的线不触发，如持有1开单的空单，则234不触发进场，持有2，则34不触发进场
+out_side_cond = input.bool(true, "持有更外侧的单子时，更内侧的线不触发", group = "彩虹蛙")
+
+
+
+
+
+
+
+// 当内侧的单子没有止盈就止损时候，同一条线及更内侧的线上不再触发开单 直到k线回归第5根线，再启动：比如第7根线的单子损了，则只能开8和9的单，第8根的单子未止盈就损了，则只允许开第9根线的单，直到k线回中轴，才解锁开单(最好为每条线做开关)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+longCondition = ta.crossover(ta.sma(close, 14), ta.sma(close, 28))
+if (longCondition)
+    strategy.entry("My Long Entry Id", strategy.long)
+
+shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
+if (shortCondition)
+    strategy.entry("My Short Entry Id", strategy.short)
