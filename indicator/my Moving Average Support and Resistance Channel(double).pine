@@ -2,7 +2,7 @@
 // © Best_Solve
 
 //@version=5
-indicator(title='my Moving Average Support and Resistance Channel', shorttitle='my double MA Channel', format=format.price, precision=8, overlay=true, timeframe='')
+indicator(title='my Moving Average Support and Resistance Channel', shorttitle='my double MA Channel', format=format.price, precision=8, overlay=true)
 mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'])
 smoothing = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'])
 length = input.int(200, minval=1, title='Length')
@@ -85,3 +85,10 @@ log.error("*************srtart**************")
 for i = 0 to 8
     log.info("{0}:  {1}", i, array.get(seriesArray, i))
 log.error("*************end*************")
+
+
+// 打印编号
+for i = 0 to 8
+    if barstate.islastconfirmedhistory
+        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_right, color = color.white)
+
