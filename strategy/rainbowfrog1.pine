@@ -2,7 +2,7 @@
 // © ashchippy
 
 //@version=5
-strategy("彩虹蛙1.0", overlay=true, margin_long=100, margin_short=100)
+strategy("彩虹蛙1.0", overlay=true, pyramiding = 1)
 
 // 需要用到 彩虹图指标 和 ATR 指标
 
@@ -101,55 +101,8 @@ var logTable=LoggerLib.initTable(logger,20,0,"top-right","small",false)
 
 for i = 0 to 8
     if barstate.islastconfirmedhistory
-        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_upper_right, color = color.white)
+        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_right, color = color.white)
 
-
-// ATR 指标
-atr_length = input.int(title='Length', defval=13, minval=1, group = "ATR")
-atr_smoothing = input.string(title='Smoothing', defval='RMA', options=['RMA', 'SMA', 'EMA', 'WMA'], group = "ATR")
-m = input.float(1.1, 'Multiplier', group = "ATR")
-src1 = input(high, group = "ATR")
-src2 = input(low, group = "ATR")
-pline = input(true, 'Show Price Lines', group = "ATR")
-col1 = input(color.blue, 'ATR Text Color', group = "ATR")
-col2 = input.color(color.teal, 'Low Text Color', inline='1', group = "ATR")
-col3 = input.color(color.red, 'High Text Color', inline='2', group = "ATR")
-
-collong = input.color(color.teal, 'Low Line Color', inline='1', group = "ATR")
-colshort = input.color(color.red, 'High Line Color', inline='2', group = "ATR")
-
-atr_ma_function(source, atr_length) =>
-    if atr_smoothing == 'RMA'
-        ta.rma(source, atr_length)
-    else
-        if atr_smoothing == 'SMA'
-            ta.sma(source, atr_length)
-        else
-            if atr_smoothing == 'EMA'
-                ta.ema(source, atr_length)
-            else
-                ta.wma(source, atr_length)
-
-a = atr_ma_function(ta.tr(true), atr_length) * m
-atr_x = atr_ma_function(ta.tr(true), atr_length) * m + src1
-atr_x2 = src2 - atr_ma_function(ta.tr(true), atr_length) * m
-
-p1 = plot(atr_x, title='ATR Short Stop Loss', color=colshort, trackprice=pline ? true : false, transp=20)
-p2 = plot(atr_x2, title='ATR Long Stop Loss', color=collong, trackprice=pline ? true : false, transp=20)
-
-var table Table = table.new(position.bottom_center, 3, 1, border_width=3)
-
-f_fillCell(_table, _column, _row, _value, _timeframe) =>
-
-    _cellText = _timeframe + str.tostring(_value, '#.#')
-    table.cell(_table, _column, _row, _cellText, text_color=col1)
-    table.cell_set_text_color(Table, 1, 0, color.new(col3, transp=0))
-    table.cell_set_text_color(Table, 2, 0, color.new(col2, transp=0))
-
-if barstate.islast
-    f_fillCell(Table, 0, 0, a, 'ATR: ')
-    f_fillCell(Table, 1, 0, atr_x, 'H: ')
-    f_fillCell(Table, 2, 0, atr_x2, 'L: ')
 
 
 // 彩虹蛙参数
@@ -172,21 +125,21 @@ s_4 = input.bool(false, "当k线上穿第4, 开空单", group = "彩虹蛙")
 
 
 // close 下穿 6
-close_through_6 = ta.crossunder(close, array.get(seriesArray, 5))
+close_through_6 = ta.crossunder(close, array.get(seriesArray, 5)) and l_6
 bgcolor(   close_through_6  ? color.new(color.lime, 80) : na)
 
 // close 下穿 7
-close_through_7 = ta.crossunder(close, array.get(seriesArray, 6))
+close_through_7 = ta.crossunder(close, array.get(seriesArray, 6)) and l_7
 bgcolor(   close_through_7  ? color.new(color.teal, 80) : na)
 
 
 // close 下穿 8
-close_through_8 = ta.crossunder(close, array.get(seriesArray, 7))
+close_through_8 = ta.crossunder(close, array.get(seriesArray, 7)) and l_8
 bgcolor(   close_through_8  ? color.new(color.green, 80) : na)
 
 
 // close 下穿 9
-close_through_9 = ta.crossunder(close, array.get(seriesArray, 8))
+close_through_9 = ta.crossunder(close, array.get(seriesArray, 8)) and l_9
 bgcolor(   close_through_9  ? color.new(color.aqua, 80) : na)
 
 
@@ -196,69 +149,189 @@ bgcolor(   close_through_5  ? color.new(color.yellow, 80) : na)
 
 
 // close 上穿 1
-close_through_1 = ta.crossover(close, array.get(seriesArray, 0))
+close_through_1 = ta.crossover(close, array.get(seriesArray, 0)) and s_1
 bgcolor(   close_through_1  ? color.new(color.blue, 80) : na)
 
 // close 上穿 2
-close_through_2 = ta.crossover(close, array.get(seriesArray, 1))
+close_through_2 = ta.crossover(close, array.get(seriesArray, 1)) and s_2
 bgcolor(   close_through_2  ? color.new(color.purple, 80) : na)
 
 // close 上穿 3
-close_through_3 = ta.crossover(close, array.get(seriesArray, 2))
+close_through_3 = ta.crossover(close, array.get(seriesArray, 2)) and s_3
 bgcolor(   close_through_3  ? color.new(color.red, 80) : na)
 
 // close 上穿 4
-close_through_4 = ta.crossover(close, array.get(seriesArray, 3))
+close_through_4 = ta.crossover(close, array.get(seriesArray, 3)) and s_4
 bgcolor(   close_through_4  ? color.new(color.navy, 80) : na)
 
 
-// 持有更外侧的单子时，更内侧的线不触发，如持有1开单的空单，则234不触发进场，持有2，则34不触发进场
-out_side_cond = input.bool(true, "持有更外侧的单子时，更内侧的线不触发", group = "彩虹蛙")
+
+// 仓位设置
+entry_percent = input.float(0.1, "每次入场百分比", group = "仓位设置")
+// 入场时的 头寸
+entry_qty =  strategy.equity * entry_percent / close
+
+// 做多 做空
+enable_long = input.bool(true, "做多", group = "仓位设置")
+enable_short = input.bool(true, "做空", group = "仓位设置")
+
+
+// 四次止盈百分比, 相加需要等于100
+percent1 = input.int(40, "第一次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent2 = input.int(30, "第二次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent3 = input.int(20, "第三次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent4 = input.int(10, "第四次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+
+// 最外侧的单子, 使用 固定止损
+fix_loss = input.float(0.1, "固定止损", group = "最外侧的单子, 使用 固定止损")
+
+// 是否已损失?
+var loss1 = 0
+var loss2 = 0
+var loss3 = 0
+var loss4 = 0
+
+var loss6 = 0
+var loss7 = 0
+var loss8 = 0
+var loss9 = 0
+
+// 是否经过5?
+var walk5 = 0
+
+
+// 经过了 中线, 把这些标记 都清除
+if close_through_5
+    loss1 := 0
+    loss2 := 0
+    loss3 := 0
+    loss4 := 0
+
+    loss6 := 0
+    loss7 := 0
+    loss8 := 0
+    loss9 := 0
+
+    walk5 := 1
+
+// 当前没有持仓
+if strategy.position_size == 0
+    id = strategy.closedtrades.entry_id(strategy.closedtrades - 1)
+    num = str.tonumber(id)
+    //如果上一个 仓位发生亏损
+    if strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+        if int(num) == 1
+            loss1 := 1
+        else if int(num) == 2
+            loss2 := 1
+        else if int(num) == 3
+            loss3 := 1
+        else if int(num) == 4
+            loss4 := 1
+        else if int(num) == 6
+            loss6 := 1
+        else if int(num) == 7
+            loss7 := 1
+        else if int(num) == 8
+            loss8 := 1
+        else if int(num) == 9
+            loss9 := 1
+
+
+if walk5 == 1
+    loss1 := 0
+    loss2 := 0
+    loss3 := 0
+    loss4 := 0
+
+    loss6 := 0
+    loss7 := 0
+    loss8 := 0
+    loss9 := 0
+
+
+// 做多
+long_num = -1
+
+// close 下穿 6, 做多
+if close_through_6 and (loss6 == 0) and (loss7 == 0) and (loss8 == 0) and (loss9 == 0)
+    long_num := 6
+// close 下穿 7, 做多
+if close_through_7 and (loss7 == 0) and (loss8 == 0) and (loss9 == 0)
+    long_num := 7
+// close 下穿 8, 做多
+if close_through_8 and (loss8 == 0) and (loss9 == 0)
+    long_num := 8
+// close 下穿 9, 做多
+if close_through_9 and (loss9 == 0)
+    long_num := 9
+
+
+if long_num != -1 and enable_long
+    strategy.entry(str.tostring(long_num), strategy.long, entry_qty)
+    walk5 := 0
+
+// 表示 持有 多单仓位
+if strategy.position_size > 0
+    name = strategy.opentrades.entry_id(strategy.opentrades - 1)
+    num = str.tonumber(name)
+    var float stop_price = 0
+    if num == 9
+        stop_price := strategy.opentrades.entry_price( strategy.opentrades - 1 ) * (1 - fix_loss)
+    else
+        stop_price := array.get(seriesArray, (int(num)))
+
+    // 设置出场
+    strategy.exit("long_exit1_" + name, name, qty_percent = percent1, limit = array.get(seriesArray, (int(num) - 2)), stop = stop_price)
+    strategy.exit("long_exit2_" + name, name, qty_percent = percent2, limit = array.get(seriesArray, (int(num) - 3)), stop = stop_price)
+    strategy.exit("long_exit3_" + name, name, qty_percent = percent3, limit = array.get(seriesArray, (int(num) - 4)), stop = stop_price)
+    strategy.exit("long_exit4_" + name, name, qty_percent = percent4, limit = array.get(seriesArray, (int(num) - 5)), stop = stop_price)
+
+    if strategy.position_size < entry_qty * 0.08
+        strategy.close(name)
+
+
+
+// 做空
+short_num = -1
+
+// close 上穿 4, 做空
+if close_through_4 and (loss4 == 0) and (loss3 == 0) and (loss2 == 0) and (loss1 == 0)
+    short_num := 4
+// close 上穿 3, 做空
+if close_through_3 and (loss3 == 0) and (loss2 == 0) and (loss1 == 0)
+    short_num := 3
+// close 上穿 2, 做空
+if close_through_2 and (loss2 == 0) and (loss1 == 0)
+    short_num := 2
+// close 上穿 1, 做空
+if close_through_1 and (loss1 == 0)
+    short_num := 1
+
+
+if short_num != -1 and enable_short
+    strategy.entry(str.tostring(short_num), strategy.short, entry_qty)
+    walk5 := 0
+
+// 表示 持有 多单仓位
+if strategy.position_size < 0
+    name = strategy.opentrades.entry_id(strategy.opentrades - 1)
+    num = str.tonumber(name)
+    var float stop_price = 0
+    if num == 1
+        stop_price := strategy.opentrades.entry_price( strategy.opentrades - 1 ) * (1 + fix_loss)
+    else
+        stop_price := array.get(seriesArray, (int(num) - 2))
+
+    // 设置出场
+    strategy.exit("short_exit1_" + name, name, qty_percent = percent1, limit = array.get(seriesArray, (int(num))), stop = stop_price)
+    strategy.exit("short_exit2_" + name, name, qty_percent = percent2, limit = array.get(seriesArray, (int(num) + 1)), stop = stop_price)
+    strategy.exit("short_exit3_" + name, name, qty_percent = percent3, limit = array.get(seriesArray, (int(num) + 2)), stop = stop_price)
+    strategy.exit("short_exit4_" + name, name, qty_percent = percent4, limit = array.get(seriesArray, (int(num) + 3)), stop = stop_price)
+
+    if math.abs(strategy.position_size) < math.abs(entry_qty * 0.08)
+        strategy.close(name)
 
 
 
 
-
-
-
-// 当内侧的单子没有止盈就止损时候，同一条线及更内侧的线上不再触发开单 直到k线回归第5根线，再启动：比如第7根线的单子损了，则只能开8和9的单，第8根的单子未止盈就损了，则只允许开第9根线的单，直到k线回中轴，才解锁开单(最好为每条线做开关)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-longCondition = ta.crossover(ta.sma(close, 14), ta.sma(close, 28))
-if (longCondition)
-    strategy.entry("My Long Entry Id", strategy.long)
-
-shortCondition = ta.crossunder(ta.sma(close, 14), ta.sma(close, 28))
-if (shortCondition)
-    strategy.entry("My Short Entry Id", strategy.short)
