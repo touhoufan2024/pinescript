@@ -1,0 +1,337 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ashchippy
+
+//@version=5
+strategy("彩虹蛙1.0", overlay=true, pyramiding = 1)
+
+// 需要用到 彩虹图指标 和 ATR 指标
+
+// 彩虹图
+mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'], group = "彩虹图")
+smoothing = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'], group = "彩虹图")
+length = input.int(200, minval=1, title='Length', group = "彩虹图")
+x1 = input.float(5, '大Factor', minval=0.001, maxval=9, group = "彩虹图")
+x2 = input.float(3.65, '小Factor', minval=0.001, maxval=9, group = "彩虹图")
+
+
+HTFp = timeframe.period == '1' ? 60 : timeframe.period == '3' ? 20 : timeframe.period == '5' ? 48 : timeframe.period == '15' ? 96 : timeframe.period == '30' ? 48 : timeframe.period == '45' ? 32 : timeframe.period == '60' ? 24 : timeframe.period == '120' ? 84 : timeframe.period == '180' ? 56 : timeframe.period == '240' ? 42 : timeframe.period == 'D' ? 30 : timeframe.period == 'W' ? 52 : 12
+
+len = mode == 'Auto' ? HTFp : length
+
+ma_function(source, length) =>
+    if smoothing == 'SMA'
+        ta.sma(source, len)
+    else
+        if smoothing == 'EMA'
+            ta.ema(source, len)
+        else
+            if smoothing == 'RMA'
+                ta.rma(source, len)
+            else
+                if smoothing == 'WMA'
+                    ta.wma(source, len)
+                else
+                    if smoothing == 'VWMA'
+                        ta.vwma(source, len)
+                    else
+                        ta.hma(source, len)
+
+// 拿到 高点和低点
+serie1 = close > open ? close : close < open ? open : high
+// 如果是绿线,  就拿到 close,  如果是红线,  就拿到 open,  如果 open == close, 就拿到 高点, 总之, 拿到高点
+serie2 = close < open ? close : close > open ? open : low
+// 拿到低点
+
+// x表示 1.618 黄金比例 系数
+
+big_bottom = ma_function(serie1, len) - x1 * ma_function(ta.tr(true), len)
+big_top = ma_function(serie2, len) + x1 * ma_function(ta.tr(true), len)
+
+big_bottom1 = big_bottom - x1 * ma_function(ta.tr(true), len)
+big_top1 = big_top + x1 * ma_function(ta.tr(true), len)
+
+
+small_bottom = ma_function(serie1, len) - x2 * ma_function(ta.tr(true), len)
+small_top = ma_function(serie2, len) + x2 * ma_function(ta.tr(true), len)
+
+small_bottom1 = small_bottom - x2 * ma_function(ta.tr(true), len)
+small_top1 = small_top + x2 * ma_function(ta.tr(true), len)
+
+// 中线, 某个 平均值 的 ma
+basis = ma_function(hlc3, len)
+
+
+plot(big_top1, '大top1', color = color.blue)       // 1
+plot(big_top, '大top0', color= color.red)          // 3
+plot(big_bottom, '大bottom0', color= color.green)  // 8
+plot(big_bottom1, '大bottom1', color.aqua)         //9
+plot(basis, 'Middle Line', color=color.yellow)    // 5
+plot(small_top1, '小top1', color = color.purple)  // 2
+plot(small_top, '小top0', color=color.navy)       // 4
+plot(small_bottom, '小bottom0', color=color.lime)   // 6
+plot(small_bottom1, '小bottom1', color = color.teal)  // 7
+
+
+// 将 series float 数据存储在数组中
+float[] seriesArray = array.new_float()
+array.push(seriesArray, big_top1)
+array.push(seriesArray, big_top)
+array.push(seriesArray, big_bottom)
+array.push(seriesArray, big_bottom1)
+array.push(seriesArray, basis)
+array.push(seriesArray, small_top1)
+array.push(seriesArray, small_top)
+array.push(seriesArray, small_bottom)
+array.push(seriesArray, small_bottom1)
+
+array.sort(seriesArray, order.descending)
+
+
+
+import paragjyoti2012/LoggerLib/5
+
+var logger=LoggerLib.init()
+var logTable=LoggerLib.initTable(logger,20,0,"top-right","small",false)
+
+// 打印, 暂时 省略
+// log.error("*************srtart**************")
+// for i = 0 to 8
+//     log.info("{0}:  {1}", i, str.tostring(array.get(seriesArray, i)))
+// log.error("*************end*************")
+
+for i = 0 to 8
+    if barstate.islastconfirmedhistory
+        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_right, color = color.white)
+
+
+
+// 彩虹蛙参数
+
+// 多单:当k线触碰第6789根彩虹线时，立刻进场（设置4个开关，可控制6，7，8，9是否可进场）
+// 空单:当k线触碰第1234根彩虹线时，立刻进场（设置4个开关，可控制1，2，3，4是否可进场）与多单分开共8个开关
+
+l_6 = input.bool(false, "当k线下穿第6, 开多单", group = "彩虹蛙")
+l_7 = input.bool(false, "当k线下穿第7, 开多单", group = "彩虹蛙")
+l_8 = input.bool(false, "当k线下穿第8, 开多单", group = "彩虹蛙")
+l_9 = input.bool(false, "当k线下穿第9, 开多单", group = "彩虹蛙")
+
+tmp = input.string("", title="---------------- 分割线 -------------------", group = "彩虹蛙")
+
+s_1 = input.bool(false, "当k线上穿第1, 开空单", group = "彩虹蛙")
+s_2 = input.bool(false, "当k线上穿第2, 开空单", group = "彩虹蛙")
+s_3 = input.bool(false, "当k线上穿第3, 开空单", group = "彩虹蛙")
+s_4 = input.bool(false, "当k线上穿第4, 开空单", group = "彩虹蛙")
+
+
+
+// close 下穿 6
+close_through_6 = ta.crossunder(close, array.get(seriesArray, 5)) and l_6
+bgcolor(   close_through_6  ? color.new(color.lime, 80) : na)
+
+// close 下穿 7
+close_through_7 = ta.crossunder(close, array.get(seriesArray, 6)) and l_7
+bgcolor(   close_through_7  ? color.new(color.teal, 80) : na)
+
+
+// close 下穿 8
+close_through_8 = ta.crossunder(close, array.get(seriesArray, 7)) and l_8
+bgcolor(   close_through_8  ? color.new(color.green, 80) : na)
+
+
+// close 下穿 9
+close_through_9 = ta.crossunder(close, array.get(seriesArray, 8)) and l_9
+bgcolor(   close_through_9  ? color.new(color.aqua, 80) : na)
+
+
+// close 穿过 中线5 号线
+close_through_5 = ta.crossover(close, array.get(seriesArray, 4)) or ta.crossunder(close, array.get(seriesArray, 4))
+bgcolor(   close_through_5  ? color.new(color.yellow, 80) : na)
+
+
+// close 上穿 1
+close_through_1 = ta.crossover(close, array.get(seriesArray, 0)) and s_1
+bgcolor(   close_through_1  ? color.new(color.blue, 80) : na)
+
+// close 上穿 2
+close_through_2 = ta.crossover(close, array.get(seriesArray, 1)) and s_2
+bgcolor(   close_through_2  ? color.new(color.purple, 80) : na)
+
+// close 上穿 3
+close_through_3 = ta.crossover(close, array.get(seriesArray, 2)) and s_3
+bgcolor(   close_through_3  ? color.new(color.red, 80) : na)
+
+// close 上穿 4
+close_through_4 = ta.crossover(close, array.get(seriesArray, 3)) and s_4
+bgcolor(   close_through_4  ? color.new(color.navy, 80) : na)
+
+
+
+// 仓位设置
+entry_percent = input.float(0.1, "每次入场百分比", group = "仓位设置")
+// 入场时的 头寸
+entry_qty =  strategy.equity * entry_percent / close
+
+// 做多 做空
+enable_long = input.bool(true, "做多", group = "仓位设置")
+enable_short = input.bool(true, "做空", group = "仓位设置")
+
+
+// 四次止盈百分比, 相加需要等于100
+percent1 = input.int(40, "第一次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent2 = input.int(30, "第二次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent3 = input.int(20, "第三次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+percent4 = input.int(10, "第四次止盈百分比", group = "四次止盈百分比, 相加需要等于100")
+
+// 最外侧的单子, 使用 固定止损
+fix_loss = input.float(0.1, "固定止损", group = "最外侧的单子, 使用 固定止损")
+
+// 是否已损失?
+var loss1 = 0
+var loss2 = 0
+var loss3 = 0
+var loss4 = 0
+
+var loss6 = 0
+var loss7 = 0
+var loss8 = 0
+var loss9 = 0
+
+// 是否经过5?
+var walk5 = 0
+
+
+// 经过了 中线, 把这些标记 都清除
+if close_through_5
+    loss1 := 0
+    loss2 := 0
+    loss3 := 0
+    loss4 := 0
+
+    loss6 := 0
+    loss7 := 0
+    loss8 := 0
+    loss9 := 0
+
+    walk5 := 1
+
+// 当前没有持仓
+if strategy.position_size == 0
+    id = strategy.closedtrades.entry_id(strategy.closedtrades - 1)
+    num = str.tonumber(id)
+    //如果上一个 仓位发生亏损
+    if strategy.closedtrades.profit(strategy.closedtrades - 1) < 0
+        if int(num) == 1
+            loss1 := 1
+        else if int(num) == 2
+            loss2 := 1
+        else if int(num) == 3
+            loss3 := 1
+        else if int(num) == 4
+            loss4 := 1
+        else if int(num) == 6
+            loss6 := 1
+        else if int(num) == 7
+            loss7 := 1
+        else if int(num) == 8
+            loss8 := 1
+        else if int(num) == 9
+            loss9 := 1
+
+
+if walk5 == 1
+    loss1 := 0
+    loss2 := 0
+    loss3 := 0
+    loss4 := 0
+
+    loss6 := 0
+    loss7 := 0
+    loss8 := 0
+    loss9 := 0
+
+
+// 做多
+long_num = -1
+
+// close 下穿 6, 做多
+if close_through_6 and (loss6 == 0) and (loss7 == 0) and (loss8 == 0) and (loss9 == 0)
+    long_num := 6
+// close 下穿 7, 做多
+if close_through_7 and (loss7 == 0) and (loss8 == 0) and (loss9 == 0)
+    long_num := 7
+// close 下穿 8, 做多
+if close_through_8 and (loss8 == 0) and (loss9 == 0)
+    long_num := 8
+// close 下穿 9, 做多
+if close_through_9 and (loss9 == 0)
+    long_num := 9
+
+
+if long_num != -1 and enable_long
+    strategy.entry(str.tostring(long_num), strategy.long, entry_qty)
+    walk5 := 0
+
+// 表示 持有 多单仓位
+if strategy.position_size > 0
+    name = strategy.opentrades.entry_id(strategy.opentrades - 1)
+    num = str.tonumber(name)
+    var float stop_price = 0
+    if num == 9
+        stop_price := strategy.opentrades.entry_price( strategy.opentrades - 1 ) * (1 - fix_loss)
+    else
+        stop_price := array.get(seriesArray, (int(num)))
+
+    // 设置出场
+    strategy.exit("long_exit1_" + name, name, qty_percent = percent1, limit = array.get(seriesArray, (int(num) - 2)), stop = stop_price)
+    strategy.exit("long_exit2_" + name, name, qty_percent = percent2, limit = array.get(seriesArray, (int(num) - 3)), stop = stop_price)
+    strategy.exit("long_exit3_" + name, name, qty_percent = percent3, limit = array.get(seriesArray, (int(num) - 4)), stop = stop_price)
+    strategy.exit("long_exit4_" + name, name, qty_percent = percent4, limit = array.get(seriesArray, (int(num) - 5)), stop = stop_price)
+
+    if strategy.position_size < entry_qty * 0.08
+        strategy.close(name)
+
+
+
+// 做空
+short_num = -1
+
+// close 上穿 4, 做空
+if close_through_4 and (loss4 == 0) and (loss3 == 0) and (loss2 == 0) and (loss1 == 0)
+    short_num := 4
+// close 上穿 3, 做空
+if close_through_3 and (loss3 == 0) and (loss2 == 0) and (loss1 == 0)
+    short_num := 3
+// close 上穿 2, 做空
+if close_through_2 and (loss2 == 0) and (loss1 == 0)
+    short_num := 2
+// close 上穿 1, 做空
+if close_through_1 and (loss1 == 0)
+    short_num := 1
+
+
+if short_num != -1 and enable_short
+    strategy.entry(str.tostring(short_num), strategy.short, entry_qty)
+    walk5 := 0
+
+// 表示 持有 多单仓位
+if strategy.position_size < 0
+    name = strategy.opentrades.entry_id(strategy.opentrades - 1)
+    num = str.tonumber(name)
+    var float stop_price = 0
+    if num == 1
+        stop_price := strategy.opentrades.entry_price( strategy.opentrades - 1 ) * (1 + fix_loss)
+    else
+        stop_price := array.get(seriesArray, (int(num) - 2))
+
+    // 设置出场
+    strategy.exit("short_exit1_" + name, name, qty_percent = percent1, limit = array.get(seriesArray, (int(num))), stop = stop_price)
+    strategy.exit("short_exit2_" + name, name, qty_percent = percent2, limit = array.get(seriesArray, (int(num) + 1)), stop = stop_price)
+    strategy.exit("short_exit3_" + name, name, qty_percent = percent3, limit = array.get(seriesArray, (int(num) + 2)), stop = stop_price)
+    strategy.exit("short_exit4_" + name, name, qty_percent = percent4, limit = array.get(seriesArray, (int(num) + 3)), stop = stop_price)
+
+    if math.abs(strategy.position_size) < math.abs(entry_qty * 0.08)
+        strategy.close(name)
+
+
+
+

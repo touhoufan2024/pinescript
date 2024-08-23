@@ -2,13 +2,16 @@
 // © Best_Solve
 
 //@version=5
-indicator(title='my Moving Average Support and Resistance Channel', shorttitle='my double MA Channel', format=format.price, precision=8, overlay=true)
+indicator(title='彩虹图', shorttitle='彩虹图', format=format.price, precision=8, overlay=true)
 mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'])
 smoothing = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'])
 length = input.int(200, minval=1, title='Length')
 x1 = input.float(5, '大Factor', minval=0.001, maxval=9)
 x2 = input.float(3.65, '小Factor', minval=0.001, maxval=9)
 HTFp = timeframe.period == '1' ? 60 : timeframe.period == '3' ? 20 : timeframe.period == '5' ? 48 : timeframe.period == '15' ? 96 : timeframe.period == '30' ? 48 : timeframe.period == '45' ? 32 : timeframe.period == '60' ? 24 : timeframe.period == '120' ? 84 : timeframe.period == '180' ? 56 : timeframe.period == '240' ? 42 : timeframe.period == 'D' ? 30 : timeframe.period == 'W' ? 52 : 12
+
+print = input.bool(false, "显示参考信号")
+
 
 len = mode == 'Auto' ? HTFp : length
 
@@ -90,5 +93,47 @@ log.error("*************end*************")
 // 打印编号
 for i = 0 to 8
     if barstate.islastconfirmedhistory
-        label.new(bar_index + 2 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_right, color = color.white)
+        label.new(bar_index + 4 , array.get(seriesArray, i), text = str.tostring(i + 1), style = label.style_label_right, color = color.white)
+
+
+
+// close 下穿 6
+close_through_6 = ta.crossunder(close, array.get(seriesArray, 5)) and print
+bgcolor(   close_through_6  ? color.new(color.lime, 80) : na)
+
+// close 下穿 7
+close_through_7 = ta.crossunder(close, array.get(seriesArray, 6)) and print
+bgcolor(   close_through_7  ? color.new(color.teal, 80) : na)
+
+
+// close 下穿 8
+close_through_8 = ta.crossunder(close, array.get(seriesArray, 7)) and print
+bgcolor(   close_through_8  ? color.new(color.green, 80) : na)
+
+
+// close 下穿 9
+close_through_9 = ta.crossunder(close, array.get(seriesArray, 8)) and print
+bgcolor(   close_through_9  ? color.new(color.aqua, 80) : na)
+
+
+// close 穿过 中线5 号线
+close_through_5 = (ta.crossover(close, array.get(seriesArray, 4)) or ta.crossunder(close, array.get(seriesArray, 4))) and print
+bgcolor(   close_through_5  ? color.new(color.yellow, 80) : na)
+
+
+// close 上穿 1
+close_through_1 = ta.crossover(close, array.get(seriesArray, 0)) and print
+bgcolor(   close_through_1  ? color.new(color.blue, 80) : na)
+
+// close 上穿 2
+close_through_2 = ta.crossover(close, array.get(seriesArray, 1)) and print
+bgcolor(   close_through_2  ? color.new(color.purple, 80) : na)
+
+// close 上穿 3
+close_through_3 = ta.crossover(close, array.get(seriesArray, 2)) and print
+bgcolor(   close_through_3  ? color.new(color.red, 80) : na)
+
+// close 上穿 4
+close_through_4 = ta.crossover(close, array.get(seriesArray, 3)) and print
+bgcolor(   close_through_4  ? color.new(color.navy, 80) : na)
 
