@@ -1,0 +1,198 @@
+
+
+//@version=5
+indicator("彩虹图2.0", overlay = true)
+
+mode = input.string(defval='User Defined', title='Mode', options=['Auto', 'User Defined'])
+smoothing = input.string(defval='VWMA', title='Smoothing', options=['SMA', 'EMA', 'RMA', 'WMA', 'VWMA', 'HMA'])
+length = input.int(200, minval=1, title='Length')
+
+line_width = input.int(1, minval=1, title='线的宽度')
+
+fixed_percent = input.float(0.05, minval=0.01, title = "最外侧 固定止损")
+enable_less_na = input.bool(true, title = "打印出来 触碰到止损的区域 ( 即:止损线 不存在 的区域)")
+enable_buy_sell = input.bool(true, title = "打印 buy sell 标签")
+
+
+x1 = input.float(10, '1', minval=-3000, maxval=3000, group = "系数设置")
+x2 = input.float(7.3, '2', minval=-3000, maxval=3000, group = "系数设置")
+x3 = input.float(5, '3', minval=-3000, maxval=3000, group = "系数设置")
+x4 = input.float(3.65, '4', minval=-3000, maxval=3000, group = "系数设置")
+x6 = input.float(-3.65, '6', minval=-3000, maxval=3000, group = "系数设置")
+x7 = input.float(-5, '7', minval=-3000, maxval=3000, group = "系数设置")
+x8 = input.float(-7.3, '8', minval=-3000, maxval=3000, group = "系数设置")
+x9 = input.float(-10, '9', minval=-3000, maxval=3000, group = "系数设置")
+
+
+enable1 = input.bool(true, '1', group = "信号使能")
+enable2 = input.bool(true, '2', group = "信号使能")
+enable3 = input.bool(true, '3', group = "信号使能")
+enable4 = input.bool(true, '4', group = "信号使能")
+enable6 = input.bool(true, '6', group = "信号使能")
+enable7 = input.bool(true, '7', group = "信号使能")
+enable8 = input.bool(true, '8', group = "信号使能")
+enable9 = input.bool(true, '9', group = "信号使能")
+
+HTFp = timeframe.period == '1' ? 60 : timeframe.period == '3' ? 20 : timeframe.period == '5' ? 48 : timeframe.period == '15' ? 96 : timeframe.period == '30' ? 48 : timeframe.period == '45' ? 32 : timeframe.period == '60' ? 24 : timeframe.period == '120' ? 84 : timeframe.period == '180' ? 56 : timeframe.period == '240' ? 42 : timeframe.period == 'D' ? 30 : timeframe.period == 'W' ? 52 : 12
+
+
+len = mode == 'Auto' ? HTFp : length
+
+ma_function(source, length) =>
+    if smoothing == 'SMA'
+        ta.sma(source, len)
+    else
+        if smoothing == 'EMA'
+            ta.ema(source, len)
+        else
+            if smoothing == 'RMA'
+                ta.rma(source, len)
+            else
+                if smoothing == 'WMA'
+                    ta.wma(source, len)
+                else
+                    if smoothing == 'VWMA'
+                        ta.vwma(source, len)
+                    else
+                        ta.hma(source, len)
+
+
+// 拿到 高点和低点
+serie1 = close > open ? close : close < open ? open : high
+// 如果是绿线,  就拿到 close,  如果是红线,  就拿到 open,  如果 open == close, 就拿到 高点, 总之, 拿到高点
+serie2 = close < open ? close : close > open ? open : low
+// 拿到低点
+
+
+line1 = ma_function(serie2, len) + x1 * ma_function(ta.tr(true), len)    // 1
+line2 = ma_function(serie2, len) + x2 * ma_function(ta.tr(true), len)  // 2
+line3 = ma_function(serie2, len) + x3 * ma_function(ta.tr(true), len)   // 3
+line4 = ma_function(serie2, len) + x4 * ma_function(ta.tr(true), len)  // 4
+line5 = ma_function(hlc3, len)
+line6 = ma_function(serie1, len) + x6 * ma_function(ta.tr(true), len)  // 6
+line7 = ma_function(serie1, len) + x7 * ma_function(ta.tr(true), len)  // 7
+line8 = ma_function(serie1, len) + x8 * ma_function(ta.tr(true), len)  // 8
+line9 = ma_function(serie1, len) + x9 * ma_function(ta.tr(true), len) // 9
+
+
+c1 = #F08080
+c2 = #FFB6C1
+c3 = #DB7093
+c4 = #FFA07A
+c5 = color.yellow
+c6 = #20B2AA
+c7 = #90EE90
+c8 = #AFEEEE
+c9 = #00FF7F
+
+
+plot(line1, color = c1, title = "line1", linewidth = line_width)
+plot(line2, color = c2, title = "line2", linewidth = line_width)
+plot(line3, color = c3, title = "line3", linewidth = line_width)
+plot(line4, color = c4, title = "line4", linewidth = line_width)
+plot(line5, color = c5, title = "line5", linewidth = line_width)
+plot(line6, color = c6, title = "line6", linewidth = line_width)
+plot(line7, color = c7, title = "line7", linewidth = line_width)
+plot(line8, color = c8, title = "line8", linewidth = line_width)
+plot(line9, color = c9, title = "line9", linewidth = line_width)
+
+
+
+// 下面开始 绘制信号
+
+
+// close 上穿 1
+cond1 = ta.crossover(high, line1) and enable1
+bgcolor(   cond1  ? color.new(c1, 80) : na)
+
+// close 上穿 2
+cond2 = ta.crossover(high, line2) and enable2
+bgcolor(   cond2  ? color.new(c2, 80) : na)
+
+
+// close 上穿 3
+cond3 = ta.crossover(high, line3) and enable3
+bgcolor(   cond3  ? color.new(c3, 80) : na)
+
+// close 上穿 4
+cond4 = ta.crossover(high, line4) and enable4
+bgcolor(   cond4  ? color.new(c4, 80) : na)
+
+
+// close 下穿 6
+cond6 = ta.crossunder(low, line6) and enable6
+bgcolor(   cond6  ? color.new(c6, 80) : na)
+
+// close 下穿 7
+cond7 = ta.crossunder(low, line7) and enable7
+bgcolor(   cond7  ? color.new(c7, 80) : na)
+
+
+// close 下穿 8
+cond8 = ta.crossunder(low, line8) and enable8
+bgcolor(   cond8  ? color.new(c8, 80) : na)
+
+// close 下穿 9
+cond9 = ta.crossunder(low, line9) and enable9
+bgcolor(   cond9  ? color.new(c9, 80) : na)
+
+
+
+plotshape((cond6 or cond7 or cond8 or cond9) and enable_buy_sell, title="Buy Signal", text="Buy", textcolor=color.white, style=shape.labelup, size=size.small, location=location.belowbar, color=color.new(#aaaaaa, 20))
+plotshape((cond1 or cond2 or cond3 or cond4) and enable_buy_sell, title="Sell Signal", text="Sell", textcolor=color.white, style=shape.labeldown, size=size.small, location=location.abovebar, color=color.new(color.blue, 20))
+
+
+// 绘制 止损线
+
+var float stop_less_value = na
+var int last_index = 0
+c_stop_less = color.silver
+
+
+if cond1
+    stop_less_value := close * (1 + fixed_percent)
+    last_index := 1
+
+if cond2
+    stop_less_value := line1
+    last_index := 2
+
+if cond3
+    stop_less_value := line2
+    last_index := 3
+
+if cond4
+    stop_less_value := line3
+    last_index := 4
+
+if cond6
+    stop_less_value := line7
+    last_index := 6
+
+if cond7
+    stop_less_value := line8
+    last_index := 7
+
+if cond8
+    stop_less_value := line9
+    last_index := 8
+
+if cond9
+    stop_less_value := close * (1 - fixed_percent)
+    last_index := 9
+
+
+
+if last_index <= 4 and ta.crossover(high, stop_less_value)
+    stop_less_value := na
+
+
+if last_index >= 6 and ta.crossunder(low, stop_less_value)
+    stop_less_value := na
+
+
+
+bgcolor((na(stop_less_value) and enable_less_na) ? color.new(color.white, 70) : na)
+
+plot(stop_less_value, color = c_stop_less, title = "止损线", linewidth = 2, style = plot.style_linebr)
+
