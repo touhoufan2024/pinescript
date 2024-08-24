@@ -12,6 +12,8 @@ line_width = input.int(1, minval=1, title='线的宽度')
 fixed_percent = input.float(0.05, minval=0.01, title = "最外侧 固定止损")
 enable_less_na = input.bool(true, title = "打印出来 触碰到止损的区域 ( 即:止损线 不存在 的区域)")
 enable_buy_sell = input.bool(true, title = "打印 buy sell 标签")
+enable_stop_profit = input.bool(true, title = "打印 止盈线")
+
 
 
 x1 = input.float(10, '1', minval=-3000, maxval=3000, group = "系数设置")
@@ -150,8 +152,10 @@ var int last_index = 0
 var float stop_profit_value = na
 
 c_stop_less = color.silver
-c_stop_profit = #00BFFF
+c_stop_profit =  enable_stop_profit ? #00BFFF : na
 
+
+// 止损线被 突破
 if last_index <= 4 and ta.crossover(high, stop_less_value)
     stop_less_value := na
 
@@ -160,6 +164,8 @@ if last_index >= 6 and ta.crossunder(low, stop_less_value)
     stop_less_value := na
 
 
+
+// 更新止盈线 和 止损 线
 if cond1
     stop_less_value := close * (1 + fixed_percent)
     stop_profit_value := line2
@@ -222,6 +228,7 @@ if last_index == 9
 
 if na(stop_less_value)
     stop_profit_value := na
+
 
 
 
