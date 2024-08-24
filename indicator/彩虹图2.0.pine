@@ -146,42 +146,11 @@ plotshape((cond1 or cond2 or cond3 or cond4) and enable_buy_sell, title="Sell Si
 
 var float stop_less_value = na
 var int last_index = 0
+
+var float stop_profit_value = na
+
 c_stop_less = color.silver
-
-
-if cond1
-    stop_less_value := close * (1 + fixed_percent)
-    last_index := 1
-
-if cond2
-    stop_less_value := line1
-    last_index := 2
-
-if cond3
-    stop_less_value := line2
-    last_index := 3
-
-if cond4
-    stop_less_value := line3
-    last_index := 4
-
-if cond6
-    stop_less_value := line7
-    last_index := 6
-
-if cond7
-    stop_less_value := line8
-    last_index := 7
-
-if cond8
-    stop_less_value := line9
-    last_index := 8
-
-if cond9
-    stop_less_value := close * (1 - fixed_percent)
-    last_index := 9
-
-
+c_stop_profit = #00BFFF
 
 if last_index <= 4 and ta.crossover(high, stop_less_value)
     stop_less_value := na
@@ -191,8 +160,73 @@ if last_index >= 6 and ta.crossunder(low, stop_less_value)
     stop_less_value := na
 
 
+if cond1
+    stop_less_value := close * (1 + fixed_percent)
+    stop_profit_value := line2
+    last_index := 1
+
+if cond2
+    stop_less_value := line1
+    stop_profit_value := line3
+    last_index := 2
+
+if cond3
+    stop_less_value := line2
+    stop_profit_value := line4
+    last_index := 3
+
+if cond4
+    stop_less_value := line3
+    stop_profit_value := line5
+    last_index := 4
+
+if cond6
+    stop_less_value := line7
+    stop_profit_value := line5
+    last_index := 6
+
+if cond7
+    stop_less_value := line8
+    stop_profit_value := line6
+    last_index := 7
+
+if cond8
+    stop_less_value := line9
+    stop_profit_value := line7
+    last_index := 8
+
+if cond9
+    stop_less_value := close * (1 - fixed_percent)
+    stop_profit_value := line8
+    last_index := 9
+
+
+
+if last_index == 1
+    stop_profit_value := line2
+if last_index == 2
+    stop_profit_value := line3
+if last_index == 3
+    stop_profit_value := line4
+if last_index == 4
+    stop_profit_value := line5
+if last_index == 6
+    stop_profit_value := line5
+if last_index == 7
+    stop_profit_value := line6
+if last_index == 8
+    stop_profit_value := line7
+if last_index == 9
+    stop_profit_value := line8
+
+
+if na(stop_less_value)
+    stop_profit_value := na
+
+
+
 
 bgcolor((na(stop_less_value) and enable_less_na) ? color.new(color.white, 70) : na)
 
 plot(stop_less_value, color = c_stop_less, title = "止损线", linewidth = 2, style = plot.style_linebr)
-
+plot(stop_profit_value, color = c_stop_profit, title = "止盈线", linewidth = 2, style = plot.style_linebr)
