@@ -1,0 +1,345 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Pmgjiv
+
+//@version=5
+strategy("山城恋FluidTrades - SMC Lite with Range Filter", overlay = true, max_labels_count = 500, max_boxes_count = 500, max_lines_count = 500, max_bars_back = 1000)
+
+//
+// FluidTrades - SMC Lite 部分
+//
+
+// SETTINGS
+swing_length = input.int(10, title = 'Swing High/Low Length', group = 'FluidTrades SMC Lite Settings', minval = 1, maxval = 50)
+history_of_demand_to_keep = input.int(20, title = 'History To Keep', group = 'FluidTrades SMC Lite Settings', minval = 5, maxval = 50)
+box_width = input.float(2.5, title = 'Supply/Demand Box Width', group = 'FluidTrades SMC Lite Settings', minval = 1, maxval = 10, step = 0.5)
+
+// VISUAL SETTINGS
+show_zigzag = input.bool(false, title = 'Show Zig Zag', group = 'FluidTrades SMC Lite Visual Settings', inline = '1')
+show_price_action_labels = input.bool(false, title = 'Show Price Action Labels', group = 'FluidTrades SMC Lite Visual Settings', inline = '2')
+
+supply_color = input.color(color.new(#EDEDED,70), title = 'Supply', group = 'FluidTrades SMC Lite Visual Settings', inline = '3')
+supply_outline_color = input.color(color.new(color.white,75), title = 'Outline', group = 'FluidTrades SMC Lite Visual Settings', inline = '3')
+
+demand_color = input.color(color.new(#00FFFF,70), title = 'Demand', group = 'FluidTrades SMC Lite Visual Settings', inline = '4')
+demand_outline_color = input.color(color.new(color.white,75), title = 'Outline', group = 'FluidTrades SMC Lite Visual Settings', inline = '4')
+
+bos_label_color = input.color(color.white, title = 'BOS Label', group = 'FluidTrades SMC Lite Visual Settings', inline = '5')
+poi_label_color = input.color(color.white, title = 'POI Label', group = 'FluidTrades SMC Lite Visual Settings', inline = '7')
+
+swing_type_color = input.color(color.black, title = 'Price Action Label', group = 'FluidTrades SMC Lite Visual Settings', inline = '8')
+zigzag_color = input.color(color.new(#000000,0), title = 'Zig Zag', group = 'FluidTrades SMC Lite Visual Settings', inline = '9')
+
+// FUNCTIONS
+f_array_add_pop(array, new_value_to_add) =>
+    array.unshift(array, new_value_to_add)
+    array.pop(array)
+
+f_sh_sl_labels(array, swing_type) =>
+    var string label_text = na
+    if swing_type == 1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HH'
+        else
+            label_text := 'LH'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_down, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+    else if swing_type == -1
+        if array.get(array, 0) >= array.get(array, 1)
+            label_text := 'HL'
+        else
+            label_text := 'LL'
+        label.new(bar_index - swing_length, array.get(array,0), text = label_text, style=label.style_label_up, textcolor = swing_type_color, color = color.new(swing_type_color, 100), size = size.tiny)
+
+f_check_overlapping(new_poi, box_array, atr) =>
+    atr_threshold = atr * 2
+    okay_to_draw = true
+    for i = 0 to array.size(box_array) - 1
+        top = box.get_top(array.get(box_array, i))
+        bottom = box.get_bottom(array.get(box_array, i))
+        poi = (top + bottom) / 2
+        upper_boundary = poi + atr_threshold
+        lower_boundary = poi - atr_threshold
+        if new_poi >= lower_boundary and new_poi <= upper_boundary
+            okay_to_draw := false
+            break
+        else 
+            okay_to_draw := true
+    okay_to_draw
+
+f_supply_demand(value_array, bn_array, box_array, label_array, box_type, atr) =>
+    atr_buffer = atr * (box_width / 10)
+    box_left = array.get(bn_array, 0)
+    box_right = bar_index
+    var float box_top = 0.00
+    var float box_bottom = 0.00
+    var float poi = 0.00
+    if box_type == 1
+        box_top := array.get(value_array, 0)
+        box_bottom := box_top - atr_buffer
+        poi := (box_top + box_bottom) / 2
+    else if box_type == -1
+        box_bottom := array.get(value_array, 0)
+        box_top := box_bottom + atr_buffer
+        poi := (box_top + box_bottom) / 2
+    okay_to_draw = f_check_overlapping(poi, box_array, atr)
+    if box_type == 1 and okay_to_draw
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = supply_outline_color, bgcolor = supply_color, extend = extend.right, text = 'SUPPLY', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90), bgcolor = color.new(poi_label_color,90), extend = extend.right, text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+    else if box_type == -1 and okay_to_draw
+        box.delete( array.get(box_array, array.size(box_array) - 1) )
+        f_array_add_pop(box_array, box.new( left = box_left, top = box_top, right = box_right, bottom = box_bottom, border_color = demand_outline_color, bgcolor = demand_color, extend = extend.right,  text = 'DEMAND', text_halign = text.align_center, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+        box.delete( array.get(label_array, array.size(label_array) - 1) )
+        f_array_add_pop(label_array, box.new( left = box_left, top = poi, right = box_right, bottom = poi, border_color = color.new(poi_label_color,90), bgcolor = color.new(poi_label_color,90), extend = extend.right,  text = 'POI', text_halign = text.align_left, text_valign = text.align_center, text_color = poi_label_color, text_size = size.small, xloc = xloc.bar_index))
+
+f_sd_to_bos(box_array, bos_array, label_array, zone_type) =>
+    if zone_type == 1
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_top(array.get(box_array,i))
+            if close >= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), 'BOS' )
+                box.set_text_color( array.get(bos_array,0), bos_label_color)
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+    if zone_type == -1
+        for i = 0 to array.size(box_array) - 1
+            level_to_break = box.get_bottom(array.get(box_array,i))
+            if close <= level_to_break
+                copied_box = box.copy(array.get(box_array,i))
+                f_array_add_pop(bos_array, copied_box)
+                mid = (box.get_top(array.get(box_array,i)) + box.get_bottom(array.get(box_array,i))) / 2
+                box.set_top(array.get(bos_array,0), mid)
+                box.set_bottom(array.get(bos_array,0), mid)
+                box.set_extend( array.get(bos_array,0), extend.none)
+                box.set_right( array.get(bos_array,0), bar_index)
+                box.set_text( array.get(bos_array,0), 'BOS' )
+                box.set_text_color( array.get(bos_array,0), bos_label_color)
+                box.set_text_size( array.get(bos_array,0), size.small)
+                box.set_text_halign( array.get(bos_array,0), text.align_center)
+                box.set_text_valign( array.get(bos_array,0), text.align_center)
+                box.delete(array.get(box_array, i))
+                box.delete(array.get(label_array, i))
+
+f_extend_box_endpoint(box_array) =>
+    for i = 0 to array.size(box_array) - 1
+        box.set_right(array.get(box_array, i), bar_index + 100)
+
+// CALCULATIONS
+atr = ta.atr(50)
+swing_high = ta.pivothigh(high, swing_length, swing_length)
+swing_low = ta.pivotlow(low, swing_length, swing_length)
+
+var swing_high_values = array.new_float(5,0.00)
+var swing_low_values = array.new_float(5,0.00)
+var swing_high_bns = array.new_int(5,0)
+var swing_low_bns = array.new_int(5,0)
+var current_supply_box = array.new_box(history_of_demand_to_keep, na)
+var current_demand_box = array.new_box(history_of_demand_to_keep, na)
+var current_supply_poi = array.new_box(history_of_demand_to_keep, na)
+var current_demand_poi = array.new_box(history_of_demand_to_keep, na)
+var supply_bos = array.new_box(5, na)
+var demand_bos = array.new_box(5, na)
+
+// NEW SWING HIGH
+if not na(swing_high)
+    f_array_add_pop(swing_high_values, swing_high)
+    f_array_add_pop(swing_high_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_high_values, 1)
+    f_supply_demand(swing_high_values, swing_high_bns, current_supply_box, current_supply_poi, 1, atr)
+else if not na(swing_low)
+    f_array_add_pop(swing_low_values, swing_low)
+    f_array_add_pop(swing_low_bns, bar_index[swing_length])
+    if show_price_action_labels
+        f_sh_sl_labels(swing_low_values, -1)
+    f_supply_demand(swing_low_values, swing_low_bns, current_demand_box, current_demand_poi, -1, atr)
+
+f_sd_to_bos(current_supply_box, supply_bos, current_supply_poi, 1)
+f_sd_to_bos(current_demand_box, demand_bos, current_demand_poi, -1)
+f_extend_box_endpoint(current_supply_box)
+f_extend_box_endpoint(current_demand_box)
+
+// ZIG ZAG
+h = ta.highest(high, swing_length * 2 + 1)
+l = ta.lowest(low, swing_length * 2 + 1)
+f_isMin(len) => l == low[len]
+f_isMax(len) => h == high[len]
+
+var dirUp = false
+var lastLow = high * 100
+var lastHigh = 0.0
+var timeLow = bar_index
+var timeHigh = bar_index
+var line li = na
+
+f_drawLine() =>
+    _li_color = show_zigzag ? zigzag_color : color.new(#ffffff,100)
+    line.new(timeHigh - swing_length, lastHigh, timeLow - swing_length, lastLow, xloc.bar_index, color=_li_color, width=2)
+
+if dirUp
+    if f_isMin(swing_length) and low[swing_length] < lastLow
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+    if f_isMax(swing_length) and high[swing_length] > lastLow
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        dirUp := false
+        li := f_drawLine()
+        li
+if not dirUp
+    if f_isMax(swing_length) and high[swing_length] > lastHigh
+        lastHigh := high[swing_length]
+        timeHigh := bar_index
+        line.delete(li)
+        li := f_drawLine()
+        li
+    if f_isMin(swing_length) and low[swing_length] < lastHigh
+        lastLow := low[swing_length]
+        timeLow := bar_index
+        dirUp := true
+        li := f_drawLine()
+        if f_isMax(swing_length) and high[swing_length] > lastLow
+            lastHigh := high[swing_length]
+            timeHigh := bar_index
+            dirUp := false
+            li := f_drawLine()
+            li
+
+//
+// Range Filter Buy and Sell 5min 部分
+//
+
+// Color variables
+upColor = color.white
+midColor = #90bff9
+downColor = color.blue
+
+// Source
+src = input(defval=close, title="Source", group = 'Range Filter Settings')
+
+// Sampling Period
+per = input.int(defval=100, minval=1, title="Sampling Period", group = 'Range Filter Settings')
+
+// Range Multiplier
+mult = input.float(defval=3.0, minval=0.1, title="Range Multiplier", group = 'Range Filter Settings')
+
+// Smooth Average Range
+smoothrng(x, t, m) =>
+    wper = t * 2 - 1
+    avrng = ta.ema(math.abs(x - x[1]), t)
+    smoothrng = ta.ema(avrng, wper) * m
+    smoothrng
+smrng = smoothrng(src, per, mult)
+
+// Range Filter
+rngfilt(x, r) =>
+    rngfilt = x
+    rngfilt := x > nz(rngfilt[1]) ? x - r < nz(rngfilt[1]) ? nz(rngfilt[1]) : x - r : 
+       x + r > nz(rngfilt[1]) ? nz(rngfilt[1]) : x + r
+    rngfilt
+filt = rngfilt(src, smrng)
+
+// Filter Direction
+upward = 0.0
+upward := filt > filt[1] ? nz(upward[1]) + 1 : filt < filt[1] ? 0 : nz(upward[1])
+downward = 0.0
+downward := filt < filt[1] ? nz(downward[1]) + 1 : filt > filt[1] ? 0 : nz(downward[1])
+
+// Target Bands
+hband = filt + smrng
+lband = filt - smrng
+
+// Colors
+filtcolor = upward > 0 ? upColor : downward > 0 ? downColor : midColor
+barcolor = src > filt and src > src[1] and upward > 0 ? upColor :
+   src > filt and src < src[1] and upward > 0 ? upColor : 
+   src < filt and src < src[1] and downward > 0 ? downColor : 
+   src < filt and src > src[1] and downward > 0 ? downColor : midColor
+
+filtplot = plot(filt, color=filtcolor, linewidth=2, title="Range Filter")
+
+// Target
+hbandplot = plot(hband, color=color.new(upColor, 70), title="High Target")
+lbandplot = plot(lband, color=color.new(downColor, 70), title="Low Target")
+
+// Fills
+fill(hbandplot, filtplot, color=color.new(upColor, 90), title="High Target Range")
+fill(lbandplot, filtplot, color=color.new(downColor, 90), title="Low Target Range")
+
+// Bar Color
+barcolor(barcolor)
+
+// Break Outs
+longCond = bool(na)
+shortCond = bool(na)
+longCond := src > filt and src > src[1] and upward > 0 or 
+   src > filt and src < src[1] and upward > 0
+shortCond := src < filt and src < src[1] and downward > 0 or 
+   src < filt and src > src[1] and downward > 0
+
+CondIni = 0
+CondIni := longCond ? 1 : shortCond ? -1 : CondIni[1]
+longCondition = longCond and CondIni[1] == -1
+shortCondition = shortCond and CondIni[1] == 1
+
+
+light_red = color.new(color.red, 80)
+light_green = color.new(color.green, 80)
+
+
+bgcolor(longCondition ? light_green : na)
+bgcolor(shortCondition ? light_red : na)
+
+// Alerts
+plotshape(longCondition, title="Buy Signal", text="Buy", textcolor=color.white, style=shape.labelup, size=size.small, location=location.belowbar, color=color.new(#aaaaaa, 20))
+plotshape(shortCondition, title="Sell Signal", text="Sell", textcolor=color.white, style=shape.labeldown, size=size.small, location=location.abovebar, color=color.new(downColor, 20))
+
+alertcondition(longCondition, title="Buy alert on Range Filter", message="Buy alert on Range Filter")
+alertcondition(shortCondition, title="Sell alert on Range Filter", message="Sell alert on Range Filter")
+alertcondition(longCondition or shortCondition, title="Buy and Sell alert on Range Filter", message="Buy and Sell alert on Range Filter")
+
+// Strategy 部分
+// 1. Replace the word "indicator" on line 2 with the word "strategy"
+// 2. Uncomment the code below by highlighting it and pressing Ctl + '/'
+// Settings for 5min BTCUSDT. For other timeframes and assets, adjust the parameters within the settings menu.
+grp_STRAT   = "Strategy settings"
+timeInput   = input.time(timestamp("1 Nov 2022 00:00 +0000"), title="Start date", group=grp_STRAT)
+tpInPips    = input.float(0.1, title="止盈 (in pips)", group=grp_STRAT)
+slInPips    = input.float(0.2, title="止损 (in pips)", group=grp_STRAT)
+
+
+// 仓位设置
+entry_percent = input.float(0.1, "每次入场百分比", group = "仓位设置")
+// 入场时的 头寸
+entry_qty =  strategy.equity * entry_percent / close
+
+
+// entry_price = strategy.opentrades.entry_price( strategy.opentrades - 1 )
+
+entry_price = close
+
+timePeriod  = time >= timeInput
+notInTrade  = strategy.position_size == 0
+if(longCondition and timePeriod and notInTrade)
+    strategy.entry("Long", strategy.long, entry_qty)
+    strategy.exit("Exit long", "Long", limit = entry_price * (1 + tpInPips), stop = entry_price * (1 - slInPips))
+if(shortCondition and timePeriod and notInTrade)
+    strategy.entry("Short", strategy.short, entry_qty)
+    strategy.exit("Exit short", "Short", limit = entry_price * (1 - tpInPips), stop = entry_price * (1 + slInPips))
+
+
+// strategy.exit("long_exit", "Long", limit = stop_profit_value, stop = stop_less_value)
+// strategy.exit("short_exit", "Short", limit = stop_profit_value, stop = stop_less_value)
