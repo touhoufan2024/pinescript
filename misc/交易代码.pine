@@ -1,0 +1,21 @@
+来自于 https://docs.google.com/document/d/1v1z_6fn1m-s5gtDJGqmzO-SlvLdGILSb/edit
+
+添加 交易测试代码
+
+// Strategy 部分
+// 1. Replace the word "indicator" on line 2 with the word "strategy"
+// 2. Uncomment the code below by highlighting it and pressing Ctl + '/'
+// Settings for 5min BTCUSDT. For other timeframes and assets, adjust the parameters within the settings menu.
+// grp_STRAT   = "Strategy settings"
+// timeInput   = input.time(timestamp("1 Nov 2022 00:00 +0000"), title="Start date", group=grp_STRAT)
+// tpInPips    = input.int(400, title="TP (in pips)", group=grp_STRAT)
+// slInPips    = input.int(100, title="SL (in pips)", group=grp_STRAT)
+// timePeriod  = time >= timeInput
+// notInTrade  = strategy.position_size <= 0
+// if(longCondition and timePeriod and notInTrade)
+//     strategy.entry("Long", strategy.long)
+//     strategy.exit("Exit long", "Long", loss=slInPips, profit=tpInPips)
+// if(shortCondition and timePeriod and notInTrade)
+//     strategy.entry("Short", strategy.short)
+//     strategy.exit("Exit short", "Short", loss=slInPips, profit=tpInPips)
+
