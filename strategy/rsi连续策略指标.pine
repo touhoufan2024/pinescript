@@ -1,0 +1,101 @@
+//@version=5
+
+strategy(title="rsi连续策略/指标")
+// indicator(title="rsi连续策略/指标")
+
+// 参数输入
+len = input.int(title="RSI Period", minval=1, defval=14)
+src = input(title="RSI Source", defval=close)
+
+upline = input(title="上线", defval=70, display = display.data_window)
+downline = input(title="下线", defval=30, display = display.data_window)
+
+exitlongline = input(title="多头退出", defval=60, display = display.data_window)
+exitshortline = input(title="空头退出", defval=40, display = display.data_window)
+persistence = input(title="连续次数", defval=3, display = display.data_window)
+
+
+bearColor = color.red
+bullColor = color.green
+hiddenBullColor = color.new(color.green, 80)
+hiddenBearColor = color.new(color.red, 80)
+textColor = color.white
+noneColor = color.new(color.white, 100)
+osc = ta.rsi(src, len)
+
+plot(osc, title="RSI", linewidth=2, color=#2962FF)
+hline(50, title="Middle Line", color=#787B86, linestyle=hline.style_dotted)
+obLevel = hline(upline, title="Overbought", color=#787B86, linestyle=hline.style_dotted)
+osLevel = hline(downline, title="Oversold", color=#787B86, linestyle=hline.style_dotted)
+fill(obLevel, osLevel, title="Background", color=color.rgb(33, 150, 243, 90))
+
+// 连续次数
+var duration = 0
+
+// 当连续次数处于中间时, 退出
+if osc < upline and osc > downline
+    duration := 0
+
+// 高于上线
+if osc >= upline
+    duration := duration + 1
+
+// 低于下线
+if osc <= downline
+    duration := duration + 1
+
+
+// 开空条件
+shortcond =  (osc >= upline) and (duration >= persistence) and osc < osc[1] //and osc[1] > osc[2] and volume > (volume[1] + volume[2])
+
+// 开多条件
+longcond =  (osc <= downline) and (duration >= persistence) and osc > osc[1] //and osc[1] < osc[2] and volume > (volume[1] + volume[2])
+
+
+
+bgcolor(shortcond ? hiddenBearColor : na)
+bgcolor(longcond ? hiddenBullColor : na)
+
+exitlong = ta.crossover(osc, exitlongline)
+exitshort = ta.crossunder(osc, exitshortline)
+
+
+alertcondition(longcond, title='longcond', message="longcond")
+alertcondition(shortcond, title='shortcond', message='shortcond')
+alertcondition(exitlong, title='exitlong', message="exitlong")
+alertcondition(exitshort, title='exitshort', message='exitshort')
+
+
+// 统计代码
+// 上线和下线应该是 浮动的, 而不是固定的
+
+
+
+
+
+
+
+
+
+grp_STRAT   = "Strategy settings"
+timeInput   = input.time(timestamp("1 Aug 2024 00:00 +0000"), title="Start date", group=grp_STRAT)
+
+
+profit = input.float(0.4, title="止盈", group=grp_STRAT)
+lost =   input.float(0.2, title="止损", group=grp_STRAT)
+
+timePeriod  = time >= timeInput
+notInTrade  = strategy.position_size <= 0
+if(longcond and timePeriod and notInTrade)
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Exit long", "Long", limit = close * (1 + profit), stop = close * (1 - lost))
+if(shortcond and timePeriod and notInTrade)
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Exit short", "Short", limit = close * (1 - profit), stop = close * (1 + lost))
+
+
+if (exitlong)
+    strategy.close("Long")
+
+if (exitshort)
+    strategy.close("Short")
