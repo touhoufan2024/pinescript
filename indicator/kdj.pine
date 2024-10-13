@@ -1,0 +1,41 @@
+//@version=5
+// @author iamaltcoin
+//
+// This KDJ indicator is a mimic of the same indicator on bitcoinwisdom
+// 
+// This script is released free of charge with no warranty
+// Please leave a not to the author of this script if it is used
+// whole or in part
+//
+indicator('my KDJ Indicator - @iamaltcoin', shorttitle='GM_V2_KDJ')
+ilong = input(25, title='period')
+isig = input(3, title='signal')
+
+bcwsma(s, l, m) =>
+    _bcwsma = float(na)
+    _s = s
+    _l = l
+    _m = m
+    _bcwsma := (_m * _s + (_l - _m) * nz(_bcwsma[1])) / _l
+    _bcwsma
+
+c = close
+h = ta.highest(high, ilong)
+l = ta.lowest(low, ilong)
+RSV = 100 * ((c - l) / (h - l))
+pK = bcwsma(RSV, isig, 1)
+pD = bcwsma(pK, isig, 1)
+pJ = 3 * pK - 2 * pD
+
+plot(pK, color=color.orange)
+plot(pD, color=color.lime)
+plot(pJ, color=color.new(#2196f3, 0))
+
+// bgcolor(pJ>pD? green : red, transp=70)
+
+// 绘制水平虚线
+hline(20, "Level 20", color=color.green, linestyle=hline.style_dashed)
+hline(80, "Level 80", color=color.red, linestyle=hline.style_dashed)
+
+
+bgcolor(pJ>pD? color.green : color.red, transp=70)
