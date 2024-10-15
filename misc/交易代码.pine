@@ -2,8 +2,8 @@ grp_STRAT   = "Strategy settings"
 timeInput   = input.time(timestamp("1 Aug 2024 00:00 +0000"), title="Start date", group=grp_STRAT)
 
 
-profit = input.float(0.4, title="止盈", group=grp_STRAT)
-lost =   input.float(0.2, title="止损", group=grp_STRAT)
+profit = input.float(0.0166, title="止盈", group=grp_STRAT)
+lost =   input.float(0.02, title="止损", group=grp_STRAT)
 
 timePeriod  = time >= timeInput
 notInTrade  = strategy.position_size <= 0
